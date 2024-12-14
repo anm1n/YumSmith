@@ -70,7 +70,7 @@ if [[ "$1" == "check" ]]; then
   else
     echo "无需构建rpm"
   fi
-elif [[ "$2" == "update" ]]; then
+elif [[ "$1" == "update" ]]; then
   write_update
 else
   echo "错误的参数：$@"
