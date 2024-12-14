@@ -23,8 +23,11 @@ check_update() {
 
         # 如果lock.json和实际的值不符
         if [[ "$get_V" != "$lock_V" || "$get_R" != "$lock_R" ]]; then
-          # 设置环境变量
-          echo "NEED_BUILD=true" >> "$GITHUB_ENV"
+          # 如果没有设置环境变量，则设置
+          if [[ -z "$ENV_SET" ]]; then
+            echo "NEED_BUILD=true" >> "$GITHUB_ENV"
+            ENV_SET=true
+          fi
 
           # 将任务写入update.json
           echo '{}' > update.json
@@ -60,6 +63,11 @@ write_update() {
 
 if [[ "$1" == "check" ]]; then
   check_update
+  if [[ "$ENV_SET" == "true" ]]; then
+    echo "需要构建rpm"
+  else
+    echo "无需构建rpm"
+  fi
 elif [[ "$2" == "update" ]]; then
   write_update
 else

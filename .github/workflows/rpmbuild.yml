@@ -30,7 +30,7 @@ jobs:
       - name: Setup rclone
         if: ${{ env.NEED_BUILD == 'true' }}
         env:
-          RCLONE_CONFIG=${{ secrets.RCLONE_CONFIG }}
+          RCLONE_CONFIG: ${{ secrets.RCLONE_CONFIG }}
         run: |
           zypper --non-interactive install rclone
           mkdir -p ~/.config/rclone
@@ -47,8 +47,8 @@ jobs:
       - name: Setup gpg
         if: ${{ env.NEED_BUILD == 'true' }}
         env: 
-          GPG_SEC=${{ secrets.GPG_SEC }}
-          GPG_SEC_ID=${{ secrets.GPG_SEC_ID }}
+          GPG_SEC: ${{ secrets.GPG_SEC }}
+          GPG_SEC_ID: ${{ secrets.GPG_SEC_ID }}
         run: |
           zypper --non-interactive install gpg2
           scripts/sign setup
