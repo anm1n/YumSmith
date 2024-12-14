@@ -5,9 +5,13 @@ set -e
 YUM_TOP_DIR="/usr/src/packages"
 
 clear_dir () {
-  rm -r "${YUM_TOP_DIR}/BUILD/"*
-  rm -r "${YUM_TOP_DIR}/BUILDROOT/"*
-  rm -r "${YUM_TOP_DIR}/SOURCES/"*
+  words=("BUILD" "BUILDROOT" "SOURCES")
+  for i in "${words[@]}"; do
+    # 仅在目录中有文件时清空目录
+    if [[ "$(ls "${YUM_TOP_DIR}/${i}" | wc -l)" -gt 0 ]]; then
+      rm -r "${YUM_TOP_DIR}/${i}/"*
+    fi
+  done
 }
 
 # 读取update.json，获取顶级键的Name即可
