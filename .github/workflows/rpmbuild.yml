@@ -90,8 +90,10 @@ jobs:
       - name: Commit lock.json
         if: ${{ env.NEED_BUILD == 'true' }}
         run: |
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config user.name "github-actions[bot]"
+          # https://github.com/actions/checkout/issues/335#issuecomment-2465968913
+          git config --global --add safe.directory "$(pwd)"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
           git add lock.json
           git commit -m "构建完成，更新lock.json"
 
