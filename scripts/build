@@ -5,9 +5,9 @@ set -e
 YUM_TOP_DIR="/usr/src/packages"
 
 clear_dir () {
-  rm -r "${YUM_TOP_DIR}/BUILD/*"
-  rm -r "${YUM_TOP_DIR}/BUILDROOT/*"
-  rm -r "${YUM_TOP_DIR}/SOURCES/*"
+  rm -r "${YUM_TOP_DIR}/BUILD/"*
+  rm -r "${YUM_TOP_DIR}/BUILDROOT/"*
+  rm -r "${YUM_TOP_DIR}/SOURCES/"*
 }
 
 # 读取update.json，获取顶级键的Name即可
@@ -16,7 +16,7 @@ file="update.json"
 for name in $(jq -r 'keys[]' "$file"); do
 
   # 由Name去复制SOURCE
-  cp "packages/${name}/*" "${YUM_TOP_DIR}/SOURCES"
+  cp "packages/${name}/"* "${YUM_TOP_DIR}/SOURCES"
   SPEC_FILE="${YUM_TOP_DIR}/SOURCES/${name}.spec"
   # 安装依赖
   echo "为 $name 安装依赖"
