@@ -18,8 +18,8 @@ check_update() {
         get_R="$(grep Release "$spec_file" | tr -s ' ' | cut -d ' ' -f2)"
     
         # lock.json中的VR
-        lock_V="$(jq -r ".${package_name}.version")"
-        lock_R="$(jq -r ".${package_name}.release")"
+        lock_V="$(jq -r ".${package_name}.version" lock.json)"
+        lock_R="$(jq -r ".${package_name}.release" lock.json)"
 
         # 如果lock.json和实际的值不符
         if [[ "$get_V" != "$lock_V" || "$get_R" != "$lock_R" ]]; then
@@ -34,7 +34,7 @@ check_update() {
           local name="$package_name"
           local version="$get_V"
           local release="$get_R"
-          jq --arg name "$name" --argjson version "$version" --argjson release "$release" \
+          jq --arg name "$name" --arg version "$version" --arg release "$release" \
             '.[$name] = {"version": $version, "release": $release}' update.json > temp.json && mv temp.json update.json
         fi
       # 如果不存在SPEC文件
@@ -55,7 +55,7 @@ write_update() {
     release=$(jq -r --arg name "$name" '.[$name].release' "$file")
   
     # 将更新写入lock.json
-    jq --arg name "$name" --argjson version "$version" --argjson release "$release" \
+    jq --arg name "$name" --arg version "$version" --arg release "$release" \
       '.[$name] = {"version": $version, "release": $release}' lock.json > temp.json && mv temp.json lock.json
   done
 }
