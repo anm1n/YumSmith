@@ -38,7 +38,9 @@ jobs:
 
       - name: Pull yum repo
         if: ${{ env.NEED_BUILD == 'true' }}
-        run: rclone copy remote:/ copy/
+        run: |
+          mkdir copy
+          rclone copy remote:/ copy/
 
       - name: Build rpms
         if: ${{ env.NEED_BUILD == 'true' }}
