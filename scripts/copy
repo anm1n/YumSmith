@@ -18,7 +18,7 @@ fi
 if [[ "$(ls "${BUILD_RPMS_DIR}/x86_64" | wc -l)" -gt 0 ]]; then
     for file in "${BUILD_RPMS_DIR}/x86_64/"*; do
         filename="$(basename "$file")"
-        if [ -e "${LOCAL_COPY}/x86_64/${$filename}" ]; then
+        if [[ -e "${LOCAL_COPY}/x86_64/${filename}" ]]; then
             echo "警告：正在覆盖文件 $filename"
         fi
         cp --force "$file" "${LOCAL_COPY}/x86_64/"
@@ -29,7 +29,7 @@ fi
 if [[ "$(ls "${BUILD_RPMS_DIR}/noarch" | wc -l)" -gt 0 ]]; then
     for file in "${BUILD_RPMS_DIR}/noarch/"*; do
         filename="$(basename "$file")"
-        if [ -e "${LOCAL_COPY}/noarch/${$filename}" ]; then
+        if [[ -e "${LOCAL_COPY}/noarch/${filename}" ]]; then
             echo "警告：正在覆盖文件 $filename"
         fi
         cp --force "$file" "${LOCAL_COPY}/noarch/"

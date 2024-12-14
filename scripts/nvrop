@@ -66,6 +66,7 @@ if [[ "$1" == "check" ]]; then
   check_update
   if [[ "$ENV_SET" == "true" ]]; then
     echo "需要构建rpm"
+    cat update.json
   else
     echo "无需构建rpm"
   fi
