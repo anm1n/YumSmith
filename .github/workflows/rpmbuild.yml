@@ -57,7 +57,12 @@ jobs:
         if: ${{ env.NEED_BUILD == 'true' }}
         run: |
           scripts/sign rpm
-      
+
+      - name: Copy rpms
+        if: ${{ env.NEED_BUILD == 'true' }}
+        run: |
+          scripts/copy
+
       - name: Update repodata
         if: ${{ env.NEED_BUILD == 'true' }}
         run: |

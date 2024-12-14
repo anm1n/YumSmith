@@ -1,0 +1,33 @@
+#!/bin/bash
+set -e
+# 将构建的RPM复制到yum仓库的本地副本中
+
+BUILD_RPMS_DIR="/usr/src/packages/RPMS"
+LOCAL_COPY="copy"
+
+# 如果本地副本目录中没有架构子目录，则创建
+if [[ ! -d "${LOCAL_COPY}/x86_64" ]]; then
+  mkdir "${LOCAL_COPY}/x86_64"
+fi
+
+if [[ ! -d "${LOCAL_COPY}/noarch" ]]; then
+  mkdir "${LOCAL_COPY}/noarch"
+fi
+
+# 复制x86_64
+for file in "${BUILD_RPMS_DIR}/x86_64/"*; do
+    filename="$(basename "$file")"
+    if [ -e "${LOCAL_COPY}/x86_64/${$filename}" ]; then
+        echo "警告：正在覆盖文件 $filename"
+    fi
+    cp --force "$file" "${LOCAL_COPY}/x86_64/"
+done
+
+# 复制noarch
+for file in "${BUILD_RPMS_DIR}/noarch/"*; do
+    filename="$(basename "$file")"
+    if [ -e "${LOCAL_COPY}/noarch/${$filename}" ]; then
+        echo "警告：正在覆盖文件 $filename"
+    fi
+    cp --force "$file" "${LOCAL_COPY}/noarch/"
+done

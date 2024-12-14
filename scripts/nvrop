@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+# 检查lock.json，确定是否需要构建，更新lock.json
 
 lock_file="lock.json"
 
