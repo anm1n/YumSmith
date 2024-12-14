@@ -86,14 +86,12 @@ jobs:
       - name: Commit lock.json
         if: ${{ env.NEED_BUILD == 'true' }}
         run: |
-          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
           git add lock.json
           git commit -m "构建完成，更新lock.json"
 
       - name: Push lock.json
         if: ${{ env.NEED_BUILD == 'true' }}
-        uses: ad-m/github-push-action@master
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ github.ref }}
+        run: |
+          git push
