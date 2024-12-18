@@ -25,7 +25,7 @@ for name in $(jq -r 'keys[]' "$file"); do
   # 安装依赖
   echo "为 $name 安装依赖"
   zypper --non-interactive install \
-    "$(rpmspec --parse ${SPEC_FILE} | grep BuildRequires | tr -s ' ' | cut -d' ' -f2)"
+    $(rpmspec --parse ${SPEC_FILE} | grep BuildRequires | tr -s ' ' | cut -d' ' -f2 | xargs)
 
   # 构建包
   echo "开始构建 $name"
