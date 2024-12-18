@@ -24,6 +24,12 @@ for name in $(jq -r 'keys[]' "$file"); do
   SPEC_FILE="${YUM_TOP_DIR}/SOURCES/${name}.spec"
   # 安装依赖
   echo "为 $name 安装依赖"
+  # 如果一个宏来自未安装的包，rpmspec将不能解析出该宏，导致错误
+  # 因此先安装显式指定的构建依赖
+  zypper --non-interactive install \
+    $(cat ${SPEC_FILE} | grep BuildRequires | tr -s ' ' | cut -d' ' -f2 | xargs)
+
+  # 如果有宏指定了额外的构建依赖，将在这里被安装
   zypper --non-interactive install \
     $(rpmspec --parse ${SPEC_FILE} | grep BuildRequires | tr -s ' ' | cut -d' ' -f2 | xargs)
 
