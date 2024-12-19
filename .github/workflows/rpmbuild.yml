@@ -26,7 +26,7 @@ jobs:
       - name: Setup basic build dependency
         if: ${{ env.NEED_BUILD == 'true' }}
         run: |
-          zypper --non-interactive install make rpmbuild rpmdevtools pattern:devel_basis createrepo_c
+          zypper --non-interactive install make rpm-build rpmdevtools pattern:devel_basis createrepo_c
 
       - name: Setup rclone
         if: ${{ env.NEED_BUILD == 'true' }}
