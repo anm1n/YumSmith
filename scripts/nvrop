@@ -25,14 +25,15 @@ check_update() {
 
         # 如果lock.json和实际的值不符
         if [[ "$get_V" != "$lock_V" || "$get_R" != "$lock_R" ]]; then
-          # 如果没有设置环境变量，则设置
-          if [[ -z "$ENV_SET" ]]; then
+          # 第一次出现需要构建的包时，创建构建标记和update.json
+          if [[ -z "$IS_SET_NEED_BUILD" ]]; then
             echo "NEED_BUILD=true" >> "$GITHUB_ENV"
-            ENV_SET=true
+            IS_SET_NEED_BUILD=true
+            # 创建update.json
+            echo '{}' > update.json
           fi
 
           # 将任务写入update.json
-          echo '{}' > update.json
           local name="$package_name"
           local version="$get_V"
           local release="$get_R"
@@ -65,7 +66,7 @@ write_update() {
 
 if [[ "$1" == "check" ]]; then
   check_update
-  if [[ "$ENV_SET" == "true" ]]; then
+  if [[ "$IS_SET_NEED_BUILD" == "true" ]]; then
     echo "需要构建rpm"
     cat update.json
   else
