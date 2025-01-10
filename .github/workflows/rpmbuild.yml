@@ -78,6 +78,9 @@ jobs:
       - name: Push yum repo
         if: ${{ env.NEED_BUILD == 'true' }}
         run: |
+          # 先删除远端的元数据，应该可以解决repomd.xml不更新的问题
+          if ! rclone delete remote:/repodata/repomd.xml; then echo "删除repomd.xml失败"; fi
+          if ! rclone delete remote:/repodata/repomd.xml; then echo "删除repomd.xml.asc失败"; fi
           rclone sync copy/ remote:/
 
       - name: Update lock.json
