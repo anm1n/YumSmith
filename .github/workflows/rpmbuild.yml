@@ -1,0 +1,104 @@
+name: Auto build rpm
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  job1:
+    runs-on: ubuntu-latest
+    container:
+      image: opensuse/tumbleweed:latest
+      options: --hostname Build-Test
+
+    steps:
+      - name: Setup git, jq
+        run: |
+          zypper --non-interactive refresh
+          zypper --non-interactive install git jq
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Check NVR
+        run: scripts/nvrop check
+
+      - name: Setup basic build dependency
+        if: ${{ env.NEED_BUILD == 'true' }}
+        run: |
+          zypper --non-interactive install make rpm-build rpmdevtools pattern:devel_basis createrepo_c
+
+      - name: Setup rclone
+        if: ${{ env.NEED_BUILD == 'true' }}
+        env:
+          RCLONE_CONFIG: ${{ secrets.RCLONE_CONFIG }}
+        run: |
+          zypper --non-interactive install rclone
+          mkdir -p ~/.config/rclone
+          echo "$RCLONE_CONFIG" > ~/.config/rclone/rclone.conf
+
+      - name: Pull yum repo
+        if: ${{ env.NEED_BUILD == 'true' }}
+        run: |
+          mkdir copy
+          rclone copy remote:/ copy/ --progress
+
+      - name: Build rpms
+        if: ${{ env.NEED_BUILD == 'true' }}
+        run: scripts/build
+
+      - name: Setup gpg
+        if: ${{ env.NEED_BUILD == 'true' }}
+        env: 
+          GPG_SEC: ${{ secrets.GPG_SEC }}
+          GPG_SEC_ID: ${{ secrets.GPG_SEC_ID }}
+        run: |
+          zypper --non-interactive install gpg2
+          scripts/sign setup
+
+      - name: Sign rpms
+        if: ${{ env.NEED_BUILD == 'true' }}
+        run: |
+          scripts/sign rpm
+
+      - name: Copy rpms
+        if: ${{ env.NEED_BUILD == 'true' }}
+        run: |
+          scripts/copy
+
+      - name: Update repodata
+        if: ${{ env.NEED_BUILD == 'true' }}
+        run: |
+          createrepo --update copy/
+
+      - name: Sign repodata
+        if: ${{ env.NEED_BUILD == 'true' }}
+        run: scripts/sign metadata
+
+      - name: Push yum repo
+        if: ${{ env.NEED_BUILD == 'true' }}
+        run: |
+          # 先删除远端的元数据，可以解决repomd.xml不更新的问题
+          if ! rclone delete remote:/repodata/repomd.xml; then echo "删除repomd.xml失败"; fi
+          if ! rclone delete remote:/repodata/repomd.xml.asc; then echo "删除repomd.xml.asc失败"; fi
+          rclone sync copy/ remote:/ --progress
+
+      - name: Update lock.json
+        if: ${{ env.NEED_BUILD == 'true' }}
+        run: scripts/nvrop update
+
+      - name: Commit lock.json
+        if: ${{ env.NEED_BUILD == 'true' }}
+        # 先设置safe.directory
+        # https://github.com/actions/checkout/issues/335#issuecomment-2465968913
+        run: |
+          git config --global --add safe.directory "$(pwd)"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add lock.json
+          git commit -m "构建完成，更新lock.json"
+
+      - name: Push lock.json
+        if: ${{ env.NEED_BUILD == 'true' }}
+        run: |
+          git push
