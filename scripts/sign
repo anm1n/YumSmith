@@ -7,7 +7,7 @@ LOCAL_COPY="copy"
 
 import_secret() {
   if [[ -n "$GPG_SEC_ID" ]]; then
-    echo "导入GPG Key"
+    echo "▶️ 导入GPG Key"
     echo "%_gpg_name ${GPG_SEC_ID}" > ~/.rpmmacros
     echo "$GPG_SEC" | gpg --import --batch --yes
   else
@@ -17,7 +17,7 @@ import_secret() {
 
 
 if [[ "$1" == "rpm" ]]; then
-  echo "为RPM签名"
+  echo "▶️ 为RPM签名"
   find "${YUM_TOP_DIR}/RPMS" -type f -name "*.rpm" -exec rpm --addsign {} \;
 elif [[ "$1" == "metadata" ]]; then
   echo "为repomd.xml签名"
@@ -25,6 +25,6 @@ elif [[ "$1" == "metadata" ]]; then
 elif [[ "$1" == "setup" ]]; then
   import_secret
 else
-  echo 错误的参数："$@"
+  echo "❌ 错误的参数：$@"
   exit 1
 fi

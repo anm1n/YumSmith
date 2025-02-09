@@ -18,13 +18,14 @@ clear_dir () {
 file="update.json"
 # 遍历顶级键name
 for name in $(jq -r 'keys[]' "$file"); do
+  echo "::group::${name}"
 
   # 由Name去复制SOURCE
   cp "packages/${name}/"* "${YUM_TOP_DIR}/SOURCES"
   SPEC_FILE="${YUM_TOP_DIR}/SOURCES/${name}.spec"
   # 如果有构建依赖，则安装
   if grep -q '^BuildRequires' "$SPEC_FILE"; then
-    echo "为 $name 安装依赖"
+    echo "▶️ 为 $name 安装依赖"
     # 如果一个宏来自未安装的包，rpmspec将不能解析出该宏，导致错误
     # 因此先安装显式指定的构建依赖
     zypper --non-interactive install \
@@ -36,8 +37,10 @@ for name in $(jq -r 'keys[]' "$file"); do
   fi
 
   # 构建包
-  echo "开始构建: $name"
+  echo "▶️ 开始构建: $name"
   rpmbuild --undefine=_disable_source_fetch -bb "$SPEC_FILE"
-  echo "构建完成: $name"
+  echo "✅ 构建完成: $name"
   clear_dir
+
+  echo "::endgroup::"
 done

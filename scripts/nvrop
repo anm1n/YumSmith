@@ -67,14 +67,14 @@ write_update() {
 if [[ "$1" == "check" ]]; then
   check_update
   if [[ "$IS_SET_NEED_BUILD" == "true" ]]; then
-    echo "需要构建rpm"
+    echo "▶️ 需要构建rpm"
     cat update.json
   else
-    echo "无需构建rpm"
+    echo "✅ 无需构建rpm"
   fi
 elif [[ "$1" == "update" ]]; then
   write_update
 else
-  echo "错误的参数：$@"
+  echo "❌ 错误的参数：$@"
   exit 1
 fi
