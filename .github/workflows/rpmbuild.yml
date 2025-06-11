@@ -81,7 +81,7 @@ jobs:
           # 先删除远端的元数据，可以解决repomd.xml不更新的问题
           if ! rclone delete remote:/repodata/repomd.xml; then echo "删除repomd.xml失败"; fi
           if ! rclone delete remote:/repodata/repomd.xml.asc; then echo "删除repomd.xml.asc失败"; fi
-          rclone sync copy/ remote:/ --progress
+          rclone sync copy/ remote:/ --progress --exclude '*debugsource*' --exclude '*debuginfo*'
 
       - name: Update lock.json
         if: ${{ env.NEED_BUILD == 'true' }}
