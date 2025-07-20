@@ -15,8 +15,8 @@ check_update() {
       # 如果存在SPEC文件
       if [[ -f "$spec_file" ]]; then
         # SPEC中的VR
-        get_V="$(grep Version "$spec_file" | tr -s ' ' | cut -d ' ' -f2)"
-        get_R="$(grep Release "$spec_file" | tr -s ' ' | cut -d ' ' -f2)"
+        get_V="$(grep 'Version:' --max-count=1 "$spec_file" | tr -s ' ' | cut -d ' ' -f2)"
+        get_R="$(grep 'Release:' --max-count=1 "$spec_file" | tr -s ' ' | cut -d ' ' -f2)"
     
         # lock.json中的VR
         # 最终需要双引号引用包名，以正确解析短横线
