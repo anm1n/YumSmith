@@ -18,10 +18,15 @@ fi
 if [[ "$(ls "${BUILD_RPMS_DIR}/x86_64" | wc -l)" -gt 0 ]]; then
     for file in "${BUILD_RPMS_DIR}/x86_64/"*; do
         filename="$(basename "$file")"
-        if [[ -e "${LOCAL_COPY}/x86_64/${filename}" ]]; then
-            echo "🚨 警告：正在覆盖文件 $filename"
+
+        if [[ "$filename" =~ (debugsource|debuginfo) ]]; then
+            echo "跳过文件：$filename"
+        else
+            if [[ -e "${LOCAL_COPY}/x86_64/${filename}" ]]; then
+                echo "🚨 警告：正在覆盖文件 $filename"
+            fi
+            cp --force "$file" "${LOCAL_COPY}/x86_64/"
         fi
-        cp --force "$file" "${LOCAL_COPY}/x86_64/"
     done
 fi
 
