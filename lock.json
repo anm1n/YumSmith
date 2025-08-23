@@ -1,1 +1,10 @@
-{}
+{
+  "hugo": {
+    "version": "0.148.2",
+    "release": "1"
+  },
+  "lxgw-wenkai": {
+    "version": "1.520",
+    "release": "1"
+  }
+}
