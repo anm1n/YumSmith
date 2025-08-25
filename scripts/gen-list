@@ -1,0 +1,47 @@
+#!/usr/bin/bash
+set -e
+# generate list.json based on repodata
+
+while getopts ":r:o:" opt; do
+  case $opt in
+    r) REPO=$OPTARG ;;
+    o) OUTPUT=$OPTARG ;;
+    ?)
+      echo "Usage: $0 -r LOCAL_PATH -o OUTPUT" >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [[ -z $REPO || -z $OUTPUT ]] ; then
+  echo "Error: Option is required" >&2
+  echo "Usage: $0 -r LOCAL_PATH -o OUTPUT" >&2
+  exit 1
+fi
+
+test -e "$OUTPUT" && rm -v "$OUTPUT"
+
+# dnf send output like 'Updating and loading repositories' to stderr
+dnf  --repofrompath=localrepo,file://"${REPO}" \
+     --setopt=localrepo.enabled=1 \
+     --setopt=localrepo.gpgcheck=0 \
+     --setopt=localrepo.repo_gpgcheck=0 \
+     --setopt=localrepo.type=rpm-md \
+     repoquery --repo=localrepo \
+     --queryformat '{"%{name}":[{"version":"%{version}", "release":"%{release}"}]}' 2> /dev/null \
+| jq -s 'reduce .[] as $item ({}; 
+    reduce ($item | to_entries[]) as $kv (.;
+        .[$kv.key] += ($kv.value // [])))' > "$OUTPUT"
+
+echo "write '$OUTPUT'"
+
+# {
+#   "name1": [
+#     { "version": "0.1.2", "release": "1" },
+#     { "version": "0.1.0", "release": "2" }
+#   ],
+#   "name2": [
+#     { "version": "1.5", "release": "1" },
+#     { "version": "1.5", "release": "3" }
+#   ]
+# }

@@ -20,8 +20,8 @@ check_update() {
     
         # lock.json中的VR
         # 最终需要双引号引用包名，以正确解析短横线
-        lock_V="$(jq -r '."'"$package_name"'".version' lock.json)"
-        lock_R="$(jq -r '."'"$package_name"'".release' lock.json)"
+        lock_V="$(jq -r '."'"$package_name"'"[0].version' lock.json)"
+        lock_R="$(jq -r '."'"$package_name"'"[0].release' lock.json)"
 
         # 如果lock.json和实际的值不符
         if [[ "$get_V" != "$lock_V" || "$get_R" != "$lock_R" ]]; then

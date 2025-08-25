@@ -1,0 +1,56 @@
+name: Update metadata of yum repo
+on:
+  workflow_dispatch:
+
+jobs:
+  job1:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Install Rclone, GPG, createrepo
+        run: |
+          apt update
+          apt install -y rclone gpg createrepo-c
+
+      - name: Pull yum repo
+        env:
+          RCLONE_CONFIG: ${{ secrets.RCLONE_CONFIG }}
+        run: |
+          mkdir -p ~/.config/rclone
+          echo "$RCLONE_CONFIG" > ~/.config/rclone/rclone.conf
+          mkdir copy
+          rclone copy remote:/ copy/ --progress
+          shred -u ~/.config/rclone/rclone.conf
+
+      - name: Update yum repo metadata
+        run: |
+          test -e copy/repodata/repomd.xml && rm -v copy/repodata/*
+          createrepo copy/
+
+      - name: Sign repomd.xml
+        env:
+          GPG_SEC: ${{ secrets.GPG_SEC }}
+          GPG_SEC_ID: ${{ secrets.GPG_SEC_ID }}
+        run: |
+          echo "import GPG key"
+          echo "$GPG_SEC" | gpg --import --batch --yes
+          gpg --detach-sign --armor --batch --yes "copy/repodata/repomd.xml"
+          gpg --batch --yes --delete-secret-keys "$GPG_SEC_ID"
+
+      - name: Update list.json
+        run: scripts/gen-list -r copy -o copy/repodata/list.json
+
+      - name: Push yum repo
+        env:
+          RCLONE_CONFIG: ${{ secrets.RCLONE_CONFIG }}
+        run: |
+          echo "$RCLONE_CONFIG" > ~/.config/rclone/rclone.conf
+          rclone sync copy/ remote:/ --progress
+          shred -u ~/.config/rclone/rclone.conf
+
+      - name: Clean secrets
+        if: always()
+        env:
+          GPG_SEC_ID: ${{ secrets.GPG_SEC_ID }}
+        run: |
+          test -e ~/.config/rclone/rclone.conf && shred -u ~/.config/rclone/rclone.conf
+          gpg --batch --yes --delete-secret-keys "$GPG_SEC_ID" || true

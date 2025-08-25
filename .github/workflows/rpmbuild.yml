@@ -17,8 +17,19 @@ jobs:
           zypper --non-interactive refresh
           zypper --non-interactive install git jq
 
+      - name: Setup rclone
+        env:
+          RCLONE_CONFIG: ${{ secrets.RCLONE_CONFIG }}
+        run: |
+          zypper --non-interactive install rclone
+          mkdir -p ~/.config/rclone
+          echo "$RCLONE_CONFIG" > ~/.config/rclone/rclone.conf
+
       - name: Checkout Repository
         uses: actions/checkout@v4
+
+      - name: Pull list.json
+        run: rclone copy remote:/repodata/list.json lock.json
 
       - name: Check NVR
         run: scripts/nvrop check
@@ -27,21 +38,6 @@ jobs:
         if: ${{ env.NEED_BUILD == 'true' }}
         run: |
           zypper --non-interactive install make rpm-build rpmdevtools pattern:devel_basis createrepo_c
-
-      - name: Setup rclone
-        if: ${{ env.NEED_BUILD == 'true' }}
-        env:
-          RCLONE_CONFIG: ${{ secrets.RCLONE_CONFIG }}
-        run: |
-          zypper --non-interactive install rclone
-          mkdir -p ~/.config/rclone
-          echo "$RCLONE_CONFIG" > ~/.config/rclone/rclone.conf
-
-      - name: Pull yum repo
-        if: ${{ env.NEED_BUILD == 'true' }}
-        run: |
-          mkdir copy
-          rclone copy remote:/ copy/ --progress
 
       - name: Build rpms
         if: ${{ env.NEED_BUILD == 'true' }}
@@ -54,51 +50,24 @@ jobs:
           GPG_SEC_ID: ${{ secrets.GPG_SEC_ID }}
         run: |
           zypper --non-interactive install gpg2
-          scripts/sign setup
+          echo "▶️ 导入GPG Key"
+          echo "%_gpg_name $GPG_SEC_ID" > ~/.rpmmacros
+          echo "$GPG_SEC" | gpg --import --batch --yes
 
       - name: Sign rpms
         if: ${{ env.NEED_BUILD == 'true' }}
         run: |
-          scripts/sign rpm
+          find "/usr/src/packages/RPMS" -type f -name "*.rpm" -exec rpm --addsign {} \;
 
-      - name: Copy rpms
+      - name: Push rpms
         if: ${{ env.NEED_BUILD == 'true' }}
         run: |
-          scripts/copy
+          find "/usr/src/packages/RPMS/x86_64" -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec rclone copy {} remote:/x86_64 --progress \;
+          find "/usr/src/packages/RPMS/noarch" -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec rclone copy {} remote:/noarch --progress \;
 
-      - name: Update repodata
+      - name: Trigger metadata update
         if: ${{ env.NEED_BUILD == 'true' }}
-        run: |
-          createrepo --update copy/
+        uses: benc-uk/workflow-dispatch@v1
+        with:
+          workflow: update-metadata.yml
 
-      - name: Sign repodata
-        if: ${{ env.NEED_BUILD == 'true' }}
-        run: scripts/sign metadata
-
-      - name: Push yum repo
-        if: ${{ env.NEED_BUILD == 'true' }}
-        run: |
-          # 先删除远端的元数据，可以解决repomd.xml不更新的问题
-          if ! rclone delete remote:/repodata/repomd.xml; then echo "删除repomd.xml失败"; fi
-          if ! rclone delete remote:/repodata/repomd.xml.asc; then echo "删除repomd.xml.asc失败"; fi
-          rclone sync copy/ remote:/ --progress --exclude '*debugsource*' --exclude '*debuginfo*'
-
-      - name: Update lock.json
-        if: ${{ env.NEED_BUILD == 'true' }}
-        run: scripts/nvrop update
-
-      - name: Commit lock.json
-        if: ${{ env.NEED_BUILD == 'true' }}
-        # 先设置safe.directory
-        # https://github.com/actions/checkout/issues/335#issuecomment-2465968913
-        run: |
-          git config --global --add safe.directory "$(pwd)"
-          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add lock.json
-          git commit -m "构建完成，更新lock.json"
-
-      - name: Push lock.json
-        if: ${{ env.NEED_BUILD == 'true' }}
-        run: |
-          git push
