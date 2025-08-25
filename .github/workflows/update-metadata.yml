@@ -8,8 +8,8 @@ jobs:
     steps:
       - name: Install Rclone, GPG, createrepo
         run: |
-          apt update
-          apt install -y rclone gpg createrepo-c dnf
+          sudo apt update
+          sudo apt install -y rclone gpg createrepo-c dnf
 
       - name: Pull yum repo
         env:
