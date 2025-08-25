@@ -13,10 +13,10 @@ jobs:
 
       - name: Pull yum repo
         env:
-          RCLONE_CONFIG: ${{ secrets.RCLONE_CONFIG }}
+          RCLONE_CONFIG_VAL: ${{ secrets.RCLONE_CONFIG }}
         run: |
           mkdir -p ~/.config/rclone
-          echo "$RCLONE_CONFIG" > ~/.config/rclone/rclone.conf
+          echo "$RCLONE_CONFIG_VAL" > ~/.config/rclone/rclone.conf
           mkdir copy
           rclone copy remote:/ copy/ --progress
           shred -u ~/.config/rclone/rclone.conf
