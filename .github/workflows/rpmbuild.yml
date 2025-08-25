@@ -29,7 +29,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Pull list.json
-        run: rclone copy remote:/repodata/list.json lock.json
+        run: |
+          if rclone ls remote:/repodata/list.json ; then rclone copy remote:/repodata/list.json lock.json; else echo '{}' > lock.json; fi
 
       - name: Check NVR
         run: scripts/nvrop check
