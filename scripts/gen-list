@@ -4,10 +4,11 @@ set -e
 
 while getopts ":r:o:" opt; do
   case $opt in
+    # NOTE $REPO should be absolute address, so file:// can work
     r) REPO=$OPTARG ;;
     o) OUTPUT=$OPTARG ;;
     ?)
-      echo "Usage: $0 -r LOCAL_PATH -o OUTPUT" >&2
+      echo "Usage: $0 -r LOCAL_ABSOLUTE_PATH -o OUTPUT" >&2
       exit 1
       ;;
   esac
@@ -15,7 +16,7 @@ done
 
 if [[ -z $REPO || -z $OUTPUT ]] ; then
   echo "Error: Option is required" >&2
-  echo "Usage: $0 -r LOCAL_PATH -o OUTPUT" >&2
+  echo "Usage: $0 -r LOCAL_ABSOLUTE_PATH -o OUTPUT" >&2
   exit 1
 fi
 
@@ -28,7 +29,7 @@ dnf  --repofrompath=localrepo,file://"${REPO}" \
      --setopt=localrepo.repo_gpgcheck=0 \
      --setopt=localrepo.type=rpm-md \
      repoquery --repo=localrepo \
-     --queryformat '{"%{name}":[{"version":"%{version}", "release":"%{release}"}]}' 2> /dev/null \
+     --queryformat '{"%{name}":[{"version":"%{version}", "release":"%{release}"}]}' \
 | jq -s 'reduce .[] as $item ({}; 
     reduce ($item | to_entries[]) as $kv (.;
         .[$kv.key] += ($kv.value // [])))' > "$OUTPUT"
