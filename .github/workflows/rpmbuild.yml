@@ -7,6 +7,9 @@ on:
 jobs:
   job1:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write # so we can dispatch sub workflow
+      contents: read
     container:
       image: opensuse/tumbleweed:latest
       options: --hostname Build-Test

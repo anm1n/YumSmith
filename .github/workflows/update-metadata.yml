@@ -24,7 +24,7 @@ jobs:
       - name: Update yum repo metadata
         run: |
           test -e copy/repodata/repomd.xml && rm -v copy/repodata/*
-          createrepo copy/
+          createrepo_c copy/
 
       - name: Sign repomd.xml
         env:
