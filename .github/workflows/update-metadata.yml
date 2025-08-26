@@ -33,7 +33,7 @@ jobs:
         run: |
           echo "import GPG key"
           echo "$GPG_SEC" | gpg --import --batch --yes
-          gpg --detach-sign --armor --batch --yes "copy/repodata/repomd.xml"
+          gpg --detach-sign --armor --batch --yes --local-user "$GPG_SEC_ID" "copy/repodata/repomd.xml"
           gpg --batch --yes --delete-secret-keys "$GPG_SEC_ID"
 
       - name: Update list.json
@@ -41,9 +41,9 @@ jobs:
 
       - name: Push yum repo
         env:
-          RCLONE_CONFIG: ${{ secrets.RCLONE_CONFIG }}
+          RCLONE_CONFIG_VAL: ${{ secrets.RCLONE_CONFIG }}
         run: |
-          echo "$RCLONE_CONFIG" > ~/.config/rclone/rclone.conf
+          echo "$RCLONE_CONFIG_VAL" > ~/.config/rclone/rclone.conf
           rclone sync copy/ remote:/ --progress
           shred -u ~/.config/rclone/rclone.conf
 

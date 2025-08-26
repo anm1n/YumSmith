@@ -51,17 +51,17 @@ jobs:
         if: ${{ env.NEED_BUILD == 'true' }}
         env: 
           GPG_SEC: ${{ secrets.GPG_SEC }}
-          GPG_SEC_ID: ${{ secrets.GPG_SEC_ID }}
         run: |
           zypper --non-interactive install gpg2
           echo "▶️ 导入GPG Key"
-          echo "%_gpg_name $GPG_SEC_ID" > ~/.rpmmacros
           echo "$GPG_SEC" | gpg --import --batch --yes
 
       - name: Sign rpms
         if: ${{ env.NEED_BUILD == 'true' }}
+        env:
+          GPG_SEC_ID: ${{ secrets.GPG_SEC_ID }}
         run: |
-          find "/usr/src/packages/RPMS" -type f -name "*.rpm" -exec rpm --addsign {} \;
+          find "/usr/src/packages/RPMS" -type f -name "*.rpm" -exec rpmsign --addsign {} --define "_gpg_name $GPG_SEC_ID" \;
 
       - name: Push rpms
         if: ${{ env.NEED_BUILD == 'true' }}
