@@ -33,7 +33,7 @@ jobs:
 
       - name: Pull list.json
         run: |
-          if rclone ls remote:/repodata/list.json ; then rclone copy remote:/repodata/list.json lock.json; else echo '{}' > lock.json; fi
+          if rclone ls remote:/repodata/list.json ; then rclone copy remote:/repodata/list.json . && mv list.json lock.json; else echo '{}' > lock.json; fi
 
       - name: Check NVR
         run: scripts/nvrop check
