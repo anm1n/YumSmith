@@ -21,7 +21,7 @@ for name in $(jq -r 'keys[]' "$file"); do
   echo "::group::${name}"
 
   # 由Name去复制SOURCE
-  cp "packages/${name}/"* "${YUM_TOP_DIR}/SOURCES"
+  cp "specs/packages/${name}/"* "${YUM_TOP_DIR}/SOURCES"
   SPEC_FILE="${YUM_TOP_DIR}/SOURCES/${name}.spec"
   # 如果有构建依赖，则安装
   if grep -q '^BuildRequires' "$SPEC_FILE"; then

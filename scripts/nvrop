@@ -5,7 +5,7 @@ set -e
 lock_file="lock.json"
 
 check_update() {
-  package_top_dir="packages"
+  package_top_dir="specs/packages"
   for subdir in "$package_top_dir"/*/; do
     # 检查是否是目录
     if [ -d "$subdir" ]; then

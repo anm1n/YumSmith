@@ -1,15 +1,34 @@
 name: Auto build rpm
 on:
-  push:
-    branches:
-      - main
+  workflow_call:
+    inputs:
+      pkg-path:
+        description: "A relative path where can found spec files"
+        required: true
+        type: string
+      rclone-repo-name:
+        description: "Section name of the yum repository in Rclone"
+        required: false
+        type: string
+        default: remote
+      metadata-workflow-name:
+        required: true
+        type: string
+
+    secrets:
+      RCLONE_CONFIG_SECTION:
+        description: "Extract from the rclone.conf file content, only the repository section is needed"
+        required: true
+      GPG_SECRET:
+        required: true
+      GPG_SECRET_ID:
+        required: true
+      GITHUB_TOKEN:
+        required: true
 
 jobs:
   job1:
     runs-on: ubuntu-latest
-    permissions:
-      actions: write # so we can dispatch sub workflow
-      contents: read
     container:
       image: opensuse/tumbleweed:latest
       options: --hostname Build-Test
@@ -22,21 +41,33 @@ jobs:
 
       - name: Setup rclone
         env:
-          RCLONE_CONFIG: ${{ secrets.RCLONE_CONFIG }}
+          RCLONE_CONFIG: ${{ secrets.RCLONE_CONFIG_SECTION }}
         run: |
           zypper --non-interactive install rclone
           mkdir -p ~/.config/rclone
           echo "$RCLONE_CONFIG" > ~/.config/rclone/rclone.conf
 
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - name: Checkout tools repository
+        uses: actions/checkout@v5
+        with:
+          repository: anm1n/yum2
+          path: tools
+          fetch-depth: 1
+
+      - name: Checkout SPECs repository
+        uses: actions/checkout@v5
+        with:
+          path: specs
+          fetch-depth: 1
 
       - name: Pull list.json
+        env:
+          RCLONE_REPO_NAME: ${{ inputs.rclone-repo-name }}
         run: |
-          if rclone ls remote:/repodata/list.json ; then rclone copy remote:/repodata/list.json . && mv list.json lock.json; else echo '{}' > lock.json; fi
+          if rclone ls ${RCLONE_REPO_NAME}:/repodata/list.json ; then rclone copy ${RCLONE_REPO_NAME}:/repodata/list.json . && mv list.json lock.json; else echo '{}' > lock.json; fi
 
       - name: Check NVR
-        run: scripts/nvrop check
+        run: tools/scripts/nvrop check
 
       - name: Setup basic build dependency
         if: ${{ env.NEED_BUILD == 'true' }}
@@ -45,12 +76,12 @@ jobs:
 
       - name: Build rpms
         if: ${{ env.NEED_BUILD == 'true' }}
-        run: scripts/build
+        run: tools/scripts/build
 
       - name: Setup gpg
         if: ${{ env.NEED_BUILD == 'true' }}
         env: 
-          GPG_SEC: ${{ secrets.GPG_SEC }}
+          GPG_SEC: ${{ secrets.GPG_SECRET }}
         run: |
           zypper --non-interactive install gpg2
           echo "▶️ 导入GPG Key"
@@ -59,19 +90,20 @@ jobs:
       - name: Sign rpms
         if: ${{ env.NEED_BUILD == 'true' }}
         env:
-          GPG_SEC_ID: ${{ secrets.GPG_SEC_ID }}
+          GPG_SEC_ID: ${{ secrets.GPG_SECRET_ID }}
         run: |
           find "/usr/src/packages/RPMS" -type f -name "*.rpm" -exec rpmsign --addsign {} --define "_gpg_name $GPG_SEC_ID" \;
 
       - name: Push rpms
         if: ${{ env.NEED_BUILD == 'true' }}
+        env:
+          RCLONE_REPO_NAME: ${{ inputs.rclone-repo-name }}
         run: |
-          find "/usr/src/packages/RPMS/x86_64" -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec rclone copy {} remote:/x86_64 --progress \;
-          find "/usr/src/packages/RPMS/noarch" -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec rclone copy {} remote:/noarch --progress \;
+          find "/usr/src/packages/RPMS/x86_64" -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec rclone copy {} ${RCLONE_REPO_NAME}:/x86_64 --progress \;
+          find "/usr/src/packages/RPMS/noarch" -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec rclone copy {} ${RCLONE_REPO_NAME}:/noarch --progress \;
 
       - name: Trigger metadata update
         if: ${{ env.NEED_BUILD == 'true' }}
         uses: benc-uk/workflow-dispatch@v1
         with:
-          workflow: update-metadata.yml
-
+          workflow: ${{ inputs.metadata-workflow-name }}

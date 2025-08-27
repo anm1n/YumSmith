@@ -1,6 +1,24 @@
 name: Update metadata of yum repo
 on:
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      rclone-repo-name:
+        description: "Section name of the yum repository in Rclone"
+        required: false
+        type: string
+        default: remote
+
+    secrets:
+      RCLONE_CONFIG_SECTION:
+        description: "Extract from the rclone.conf file content, only the repository section is needed"
+        required: true
+      GPG_SECRET:
+        description: ""
+        required: true
+      GPG_SECRET_ID:
+        required: true
+      GITHUB_TOKEN:
+        required: true
 
 jobs:
   job1:
@@ -8,6 +26,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          repository: anm1n/yum2
+          path: tools
+          fetch-depth: 1
 
       - name: Install Rclone, GPG, createrepo
         run: |
@@ -16,12 +38,13 @@ jobs:
 
       - name: Pull yum repo
         env:
-          RCLONE_CONFIG_VAL: ${{ secrets.RCLONE_CONFIG }}
+          RCLONE_CONFIG_VAL: ${{ secrets.RCLONE_CONFIG_SECTION }}
+          RCLONE_REPO_NAME: ${{ inputs.rclone-repo-name }}
         run: |
           mkdir -p ~/.config/rclone
           echo "$RCLONE_CONFIG_VAL" > ~/.config/rclone/rclone.conf
           mkdir copy
-          rclone copy remote:/ copy/ --progress
+          rclone copy ${RCLONE_REPO_NAME}:/ copy/ --progress
           shred -u ~/.config/rclone/rclone.conf
 
       - name: Update yum repo metadata
@@ -31,8 +54,8 @@ jobs:
 
       - name: Sign repomd.xml
         env:
-          GPG_SEC: ${{ secrets.GPG_SEC }}
-          GPG_SEC_ID: ${{ secrets.GPG_SEC_ID }}
+          GPG_SEC: ${{ secrets.GPG_SECRET }}
+          GPG_SEC_ID: ${{ secrets.GPG_SECRET_ID }}
         run: |
           echo "import GPG key"
           echo "$GPG_SEC" | gpg --import --batch --yes
@@ -40,20 +63,21 @@ jobs:
           gpg --batch --yes --delete-secret-keys "$GPG_SEC_ID"
 
       - name: Generate list.json
-        run: scripts/gen-list -r "$(pwd)/copy" -o copy/repodata/list.json
+        run: tools/scripts/gen-list -r "$(pwd)/copy" -o copy/repodata/list.json
 
       - name: Push metadata
         env:
-          RCLONE_CONFIG_VAL: ${{ secrets.RCLONE_CONFIG }}
+          RCLONE_CONFIG_VAL: ${{ secrets.RCLONE_CONFIG_SECTION }}
+          RCLONE_REPO_NAME: ${{ inputs.rclone-repo-name }}
         run: |
           echo "$RCLONE_CONFIG_VAL" > ~/.config/rclone/rclone.conf
-          rclone sync copy/ remote:/ --progress
+          rclone sync copy/ ${RCLONE_REPO_NAME}:/ --progress
           shred -u ~/.config/rclone/rclone.conf
 
       - name: Clean secrets
         if: always()
         env:
-          GPG_SEC_ID: ${{ secrets.GPG_SEC_ID }}
+          GPG_SEC_ID: ${{ secrets.GPG_SECRET_ID }}
         run: |
           test -e ~/.config/rclone/rclone.conf && shred -u ~/.config/rclone/rclone.conf
           gpg --batch --yes --delete-secret-keys "$GPG_SEC_ID" || true
