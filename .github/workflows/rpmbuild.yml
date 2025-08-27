@@ -23,8 +23,8 @@ on:
         required: true
       GPG_SECRET_ID:
         required: true
-      GITHUB_TOKEN:
-        required: true
+      TOKEN:
+        required: false
 
 jobs:
   job1:
@@ -53,6 +53,7 @@ jobs:
           repository: anm1n/yum2
           path: tools
           fetch-depth: 1
+          token: ${{ secrets.TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Checkout SPECs repository
         uses: actions/checkout@v5
