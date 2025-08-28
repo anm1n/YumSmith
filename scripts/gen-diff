@@ -1,11 +1,17 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
+
 # gen diff.json based on spec and status
 # Usage: $0 spec.json status.json
 
-
 spec_file="$1"
 status_file="$2"
+
+# spec.json sould not be empty
+if [ "$(jq 'length' "$spec_file")" -eq 0 ]; then
+  echo "Error: spec.json is empty" >&2
+  exit 1
+fi
 
 jq --slurpfile status "$status_file" '
   # all packages in spec
@@ -27,4 +33,6 @@ jq --slurpfile status "$status_file" '
   | group_by(.name)
   | map({ (.[0].name): map(del(.name)) })
   | add
+  # output {} when no difference
+  // {}
 ' "$spec_file"
