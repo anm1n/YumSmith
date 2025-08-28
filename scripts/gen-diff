@@ -1,0 +1,30 @@
+#!/usr/bin/bash
+set -euo pipefail
+# gen diff.json based on spec and status
+# Usage: $0 spec.json status.json
+
+
+spec_file="$1"
+status_file="$2"
+
+jq --slurpfile status "$status_file" '
+  # all packages in spec
+  to_entries
+  | map(
+      .key as $name
+      | .value[] | . + {name: $name}
+    ) as $spec_pkgs
+  # all packages in status
+  | ($status[0] | to_entries
+      | map(
+          .key as $name
+          | .value[] | . + {name: $name}
+        )
+    ) as $status_pkgs
+  # find packages in spec but not in status
+  | ($spec_pkgs - $status_pkgs)
+  # arrange packages in format { name: [ {...}, {...} ] }
+  | group_by(.name)
+  | map({ (.[0].name): map(del(.name)) })
+  | add
+' "$spec_file"

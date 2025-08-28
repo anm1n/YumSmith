@@ -63,8 +63,8 @@ jobs:
           gpg --detach-sign --armor --batch --yes --local-user "$GPG_SEC_ID" "copy/repodata/repomd.xml"
           gpg --batch --yes --delete-secret-keys "$GPG_SEC_ID"
 
-      - name: Generate list.json
-        run: tools/scripts/gen-list -r "$(pwd)/copy" -o copy/repodata/list.json
+      - name: Generate status.json
+        run: tools/scripts/gen-status -r "$(pwd)/copy" -o copy/repodata/status.json
 
       - name: Push metadata
         env:

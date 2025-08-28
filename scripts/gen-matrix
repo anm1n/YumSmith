@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# gen final matrix based on project config, global matrix.yaml, diff.json
+# Requires: jq (>=1.5) + yq v4
+
+
+diff_file=""
+matrix_file=""
+root_dir=""
+
+# Parse arguments
+while getopts ":d:m:r:" opt; do
+  case "$opt" in
+    d) diff_file="$OPTARG" ;;
+    m) matrix_file="$OPTARG" ;;
+    r) root_dir="$OPTARG" ;;
+    \?)
+      echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
+    :)
+      echo "Option -$OPTARG requires an argument" >&2; exit 1 ;;
+  esac
+done
+
+# Validate required arguments
+if [[ -z "$diff_file" || -z "$matrix_file" || -z "$root_dir" ]]; then
+  echo "Usage: $0 -d diff.json -m matrix.yaml -r ROOT_DIR" >&2
+  exit 1
+fi
+[[ -f "$diff_file" ]] || { echo "File not found: $diff_file" >&2; exit 1; }
+[[ -f "$matrix_file" ]] || { echo "File not found: $matrix_file" >&2; exit 1; }
+[[ -d "$root_dir" ]] || { echo "Directory not found: $root_dir" >&2; exit 1; }
+
+# Read global matrix.yaml -> JSON
+global_matrix="$(yq -o=json '.' "$matrix_file")"
+
+# Read diff.json -> array and add pkg field
+pkg_array="$(jq -c 'to_entries | map(.key as $pkg | .value[] + {pkg: $pkg})' "$diff_file")"
+
+# Process each package
+echo "$pkg_array" | jq -c '.[]' | while read -r pkgobj; do
+  pkgname="$(jq -r '.pkg' <<<"$pkgobj")"
+
+  # Locate config.yaml or config.yml (yaml takes priority)
+  config_path=""
+  if [[ -f "$root_dir/$pkgname/config.yaml" ]]; then
+    config_path="$root_dir/$pkgname/config.yaml"
+  elif [[ -f "$root_dir/$pkgname/config.yml" ]]; then
+    config_path="$root_dir/$pkgname/config.yml"
+  fi
+
+  # Exit if config file is missing
+  if [[ -z "$config_path" ]]; then
+    echo "Error: config file not found for package '$pkgname'" >&2
+    exit 1
+  fi
+
+  # If config defines matrix, use it
+  if yq -e '.matrix' "$config_path" >/dev/null 2>&1; then
+    yq -o=json '.matrix[]' "$config_path" | jq -c '.' | while read -r cm; do
+      distro="$(jq -r '.distro' <<<"$cm")"
+      branch="$(jq -r '.branch' <<<"$cm")"
+      image="$(jq -r '.image // empty' <<<"$cm")"
+
+      # If image not defined in config, look up in global matrix
+      if [[ -z "$image" ]]; then
+        image="$(jq -r --arg d "$distro" --arg b "$branch" \
+          '.[] | select(.distro==$d and .branch==$b) | .image // empty' <<<"$global_matrix")"
+        [[ -n "$image" ]] || { echo "Error: no image defined for $pkgname ($distro/$branch)" >&2; exit 1; }
+      fi
+
+      jq -n --argjson base "$pkgobj" \
+            --arg distro "$distro" \
+            --arg branch "$branch" \
+            --arg image "$image" \
+        '$base + {distro:$distro, branch:$branch, image:$image} | with_entries(.value |= tostring)'
+    done
+  else
+    # No matrix in config, use global matrix
+    distro="$(jq -r '.distro' <<<"$pkgobj")"
+    branch="$(jq -r '.branch' <<<"$pkgobj")"
+    image="$(jq -r --arg d "$distro" --arg b "$branch" \
+      '.[] | select(.distro==$d and .branch==$b) | .image // empty' <<<"$global_matrix")"
+    [[ -n "$image" ]] || { echo "Error: no image defined for $pkgname ($distro/$branch)" >&2; exit 1; }
+
+    jq -n --argjson base "$pkgobj" \
+          --arg distro "$distro" \
+          --arg branch "$branch" \
+          --arg image "$image" \
+      '$base + {distro:$distro, branch:$branch, image:$image} | with_entries(.value |= tostring)'
+  fi
+done | jq -s '.'

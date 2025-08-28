@@ -1,0 +1,100 @@
+#!/usr/bin/bash
+set -euo pipefail
+# gen spec.json based on projects config and global matrix.yaml
+
+OUTPUT_FILE=""
+ROOT_DIR=""
+MATRIX_FILE=""
+
+while getopts "o:r:m:" opt; do
+  case "$opt" in
+    o) OUTPUT_FILE="$OPTARG" ;;
+    r) ROOT_DIR="$OPTARG" ;;
+    m) MATRIX_FILE="$OPTARG" ;;
+    *) echo "Usage: $0 -o <output file> -r <Project parent dir> -m <matrix.yaml>" >&2
+       exit 1 ;;
+  esac
+done
+
+if [[ -z "$OUTPUT_FILE" || -z "$ROOT_DIR" || -z "$MATRIX_FILE" ]]; then
+    echo "Error: options -o, -r, -m are required" >&2
+    echo "Usage: $0 -o <output file> -r <Project parent dir> -m <matrix.yaml>" >&2
+    exit 1
+fi
+
+command -v yq >/dev/null 2>&1 || { echo "yq not found in PATH"; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "jq not found in PATH"; exit 1; }
+
+result="{}"
+project_count=0
+package_count=0
+
+for project_dir in "$ROOT_DIR"/*; do
+    if [ -d "$project_dir" ]; then
+        project_name=$(basename "$project_dir")
+
+        # Priority: config.yaml > config.yml
+        config_file=""
+        if [ -f "$project_dir/config.yaml" ]; then
+            config_file="$project_dir/config.yaml"
+        elif [ -f "$project_dir/config.yml" ]; then
+            config_file="$project_dir/config.yml"
+        fi
+
+        if [ -z "$config_file" ]; then
+            echo "Skipping project $project_name: config.yaml or config.yml not found"
+            continue
+        fi
+
+
+        # a SPEC file is required
+        if [ ! -e "${project_dir}/${project_name}.spec" ]; then
+            echo "Skipping project $project_name: ${project_name}.spec not found"
+            continue
+        fi
+
+        (( project_count=project_count + 1 ))
+
+        pkg_name=$(yq '.package' "$config_file")
+        version=$(yq '.version.current' "$config_file")
+        release="$(grep 'Release:' --max-count=1 "${project_dir}/${project_name}.spec" | tr -s ' ' | cut -d ' ' -f2)"
+
+        # if matrix in config
+        if yq '.matrix' "$config_file" >/dev/null 2>&1 && \
+           [ "$(yq '.matrix' "$config_file")" != "null" ]; then
+            mapfile -t entries < <(yq -o=json -I=0 '.matrix[]' "$config_file" | jq -c '.')
+        else
+            # if matrix NOT in config
+            mapfile -t entries < <(yq -o=json -I=0 '.[]' "$MATRIX_FILE" | jq -c '.')
+        fi
+
+        # package count
+        package_count=$((package_count + ${#entries[@]}))
+
+        items_json="[]"
+        for entry in "${entries[@]}"; do
+            distro=$(echo "$entry" | jq -r '.distro')
+            branch=$(echo "$entry" | jq -r '.branch')
+
+            item=$(jq -n \
+                --arg version "$version" \
+                --arg release "$release" \
+                --arg distro "$distro" \
+                --arg branch "$branch" \
+                '{version: $version, release: $release, distro: $distro, branch: $branch}'
+            )
+
+            items_json=$(echo "$items_json" | jq ". + [$item]")
+        done
+
+        result=$(echo "$result" | jq --arg key "$pkg_name" --argjson val "$items_json" '. + {($key): $val}')
+        echo "Processed project $project_name"
+    fi
+done
+
+echo "📊 Summary:"
+echo "   - Project count: $project_count"
+echo "   - Package count: $package_count"
+
+echo "$result" | jq '.' > "$OUTPUT_FILE"
+echo "✅ JSON write to: $OUTPUT_FILE"

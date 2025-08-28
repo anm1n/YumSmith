@@ -1,4 +1,4 @@
-name: Auto build rpm
+name: Auto build RPMs
 on:
   workflow_call:
     inputs:
@@ -14,6 +14,9 @@ on:
       metadata-workflow-name:
         required: true
         type: string
+      matrix-file:
+        required: true
+        type: string
 
     secrets:
       RCLONE_CONFIG_SECTION:
@@ -27,25 +30,15 @@ on:
         required: false
 
 jobs:
-  job1:
-    runs-on: ubuntu-latest
-    container:
-      image: opensuse/tumbleweed:latest
-      options: --hostname Build-Test
-
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.gen-matrix.outputs.matrix }}
     steps:
-      - name: Setup git, jq
+      - name: Install Rclone
         run: |
-          zypper --non-interactive refresh
-          zypper --non-interactive install git jq
-
-      - name: Setup rclone
-        env:
-          RCLONE_CONFIG: ${{ secrets.RCLONE_CONFIG_SECTION }}
-        run: |
-          zypper --non-interactive install rclone
-          mkdir -p ~/.config/rclone
-          echo "$RCLONE_CONFIG" > ~/.config/rclone/rclone.conf
+          sudo apt update
+          sudo apt install rclone
 
       - name: Checkout tools repository
         uses: actions/checkout@v5
@@ -61,50 +54,65 @@ jobs:
           path: specs
           fetch-depth: 1
 
-      - name: Pull list.json
+      - name: Setup Rclone
+        run: |
+          sudo apt update
+          sudo apt install rclone
+          mkdir -p ~/.config/rclone
+
+      - name: Pull status.json
         env:
+          RCLONE_CONFIG_SECTION: ${{ secrets.RCLONE_CONFIG_SECTION }}
           RCLONE_REPO_NAME: ${{ inputs.rclone-repo-name }}
         run: |
-          if rclone ls ${RCLONE_REPO_NAME}:/repodata/list.json ; then rclone copy ${RCLONE_REPO_NAME}:/repodata/list.json . && mv list.json lock.json; else echo '{}' > lock.json; fi
+          echo "$RCLONE_CONFIG_SECTION" | base64 -d > ~/.config/rclone/rclone.conf
 
-      - name: Check NVR
-        run: tools/scripts/nvrop check
+          if rclone ls ${RCLONE_REPO_NAME}:/repodata/status.json > /dev/null ; then
+            rclone copy ${RCLONE_REPO_NAME}:/repodata/status.json .
+          else
+            echo "Warn: status.json not exist on $RCLONE_REPO_NAME"
+            echo "Warn: will rebuild everything"
+            echo '{}' > status.json
+          fi
 
-      - name: Setup basic build dependency
-        if: ${{ env.NEED_BUILD == 'true' }}
+          shred -u ~/.config/rclone/rclone.conf
+
+      - name: Gen spec.json
         run: |
-          zypper --non-interactive install make rpm-build rpmdevtools pattern:devel_basis createrepo_c
+          tools/scripts/gen-spec -o spec.json -r specs/${{ inputs.pkg-path }} -m specs/${{ inputs.matrix-file }}
+          cat spec.json
 
-      - name: Build rpms
-        if: ${{ env.NEED_BUILD == 'true' }}
-        run: tools/scripts/build
-
-      - name: Setup gpg
-        if: ${{ env.NEED_BUILD == 'true' }}
-        env: 
-          GPG_SEC: ${{ secrets.GPG_SECRET }}
+      - name: Gen diff.json
         run: |
-          zypper --non-interactive install gpg2
-          echo "▶️ 导入GPG Key"
-          echo "$GPG_SEC" | gpg --import --batch --yes
+          tools/scripts/gen-diff spec.json status.json > diff.json
+          cat diff.json
 
-      - name: Sign rpms
-        if: ${{ env.NEED_BUILD == 'true' }}
-        env:
-          GPG_SEC_ID: ${{ secrets.GPG_SECRET_ID }}
+      - name: Gen matrix
+        id: gen-matrix
         run: |
-          find "/usr/src/packages/RPMS" -type f -name "*.rpm" -exec rpmsign --addsign {} --define "_gpg_name $GPG_SEC_ID" \;
+          tools/scripts/gen-matrix -d diff.json -r specs/${{ inputs.pkg-path }} -m specs/${{ inputs.matrix-file }} > matrix.json
+          cat matrix.json
 
-      - name: Push rpms
-        if: ${{ env.NEED_BUILD == 'true' }}
-        env:
-          RCLONE_REPO_NAME: ${{ inputs.rclone-repo-name }}
+          echo "matrix<<__EOF___" >> $GITHUB_OUTPUT
+          cat matrix.json >> $GITHUB_OUTPUT
+          echo "__EOF___" >> $GITHUB_OUTPUT
+
+
+  build:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.prepare.outputs.matrix) }}
+
+    steps:
+      - name: test matrix
         run: |
-          find "/usr/src/packages/RPMS/x86_64" -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec rclone copy {} ${RCLONE_REPO_NAME}:/x86_64 --progress \;
-          find "/usr/src/packages/RPMS/noarch" -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec rclone copy {} ${RCLONE_REPO_NAME}:/noarch --progress \;
-
-      - name: Trigger metadata update
-        if: ${{ env.NEED_BUILD == 'true' }}
-        uses: benc-uk/workflow-dispatch@v1
-        with:
-          workflow: ${{ inputs.metadata-workflow-name }}
+          echo ${{ matrix.pkg }}
+          echo ${{ matrix.version }}
+          echo ${{ matrix.release }}
+          echo ${{ matrix.distro }}
+          echo ${{ matrix.branch }}
+          echo ${{ matrix.image }}
+          sleep 10s
