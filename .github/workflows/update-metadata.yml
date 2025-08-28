@@ -43,7 +43,7 @@ jobs:
           RCLONE_REPO_NAME: ${{ inputs.rclone-repo-name }}
         run: |
           mkdir -p ~/.config/rclone
-          echo "$RCLONE_CONFIG_VAL" > ~/.config/rclone/rclone.conf
+          echo "$RCLONE_CONFIG_VAL" | base64 -d > ~/.config/rclone/rclone.conf
           mkdir copy
           rclone copy ${RCLONE_REPO_NAME}:/ copy/ --progress
           shred -u ~/.config/rclone/rclone.conf
@@ -59,7 +59,7 @@ jobs:
           GPG_SEC_ID: ${{ secrets.GPG_SECRET_ID }}
         run: |
           echo "import GPG key"
-          echo "$GPG_SEC" | gpg --import --batch --yes
+          echo "$GPG_SEC" | base64 -d | gpg --import --batch --yes
           gpg --detach-sign --armor --batch --yes --local-user "$GPG_SEC_ID" "copy/repodata/repomd.xml"
           gpg --batch --yes --delete-secret-keys "$GPG_SEC_ID"
 
@@ -71,7 +71,7 @@ jobs:
           RCLONE_CONFIG_VAL: ${{ secrets.RCLONE_CONFIG_SECTION }}
           RCLONE_REPO_NAME: ${{ inputs.rclone-repo-name }}
         run: |
-          echo "$RCLONE_CONFIG_VAL" > ~/.config/rclone/rclone.conf
+          echo "$RCLONE_CONFIG_VAL" | base64 -d > ~/.config/rclone/rclone.conf
           rclone sync copy/ ${RCLONE_REPO_NAME}:/ --progress
           shred -u ~/.config/rclone/rclone.conf
 

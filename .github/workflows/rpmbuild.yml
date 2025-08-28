@@ -35,11 +35,6 @@ jobs:
     outputs:
       matrix: ${{ steps.gen-matrix.outputs.matrix }}
     steps:
-      - name: Install Rclone
-        run: |
-          sudo apt update
-          sudo apt install rclone
-
       - name: Checkout tools repository
         uses: actions/checkout@v5
         with:
