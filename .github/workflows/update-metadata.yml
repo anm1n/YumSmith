@@ -75,7 +75,7 @@ jobs:
           rclone sync copy/ ${RCLONE_REPO_NAME}:/ --progress
           shred -u ~/.config/rclone/rclone.conf
 
-      - name: Clean secrets
+      - name: Clean environment
         if: always()
         env:
           GPG_SEC_ID: ${{ secrets.GPG_SECRET_ID }}

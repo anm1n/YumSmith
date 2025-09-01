@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    echo "Usage: $0 -g <global_hooks_root> -p <project_dir> -t <hook_type> -d <distro> -b <branch> [-e]"
+    exit 1
+}
+
+EXECUTE=false
+while getopts ":g:p:t:d:b:e" opt; do
+    case $opt in
+        g) GLOBAL_ROOT="$OPTARG" ;;
+        p) PROJECT_DIR="$OPTARG" ;;
+        t) HOOK_TYPE="$OPTARG" ;;
+        d) DISTRO="$OPTARG" ;;
+        b) BRANCH="$OPTARG" ;;
+        e) EXECUTE=true ;;
+        *) usage ;;
+    esac
+done
+
+[[ -z "${GLOBAL_ROOT:-}" || -z "${PROJECT_DIR:-}" || -z "${HOOK_TYPE:-}" || -z "${DISTRO:-}" || -z "${BRANCH:-}" ]] && usage
+
+# find project config
+CONFIG_FILE=""
+if [[ -f "$PROJECT_DIR/config.yaml" ]]; then
+    CONFIG_FILE="$PROJECT_DIR/config.yaml"
+elif [[ -f "$PROJECT_DIR/config.yml" ]]; then
+    CONFIG_FILE="$PROJECT_DIR/config.yml"
+else
+    echo "Error: No config.yaml or config.yml found in $PROJECT_DIR" >&2
+    exit 1
+fi
+
+if ! command -v yq >/dev/null 2>&1; then
+    echo "Error: yq is required but not found" >&2
+    exit 1
+fi
+
+# if global hook is disabled
+DISABLE_GLOBAL=$(yq e ".hooks.disable_global[]?" "$CONFIG_FILE" | grep -Fx "$HOOK_TYPE" || true)
+
+SCRIPTS_TO_RUN=()
+
+# 1. pre_global
+PRE_UNI=$(yq e ".hooks.universal.pre_global_${HOOK_TYPE}[]?" "$CONFIG_FILE" || true)
+for s in $PRE_UNI; do
+    [[ -n "$s" ]] && SCRIPTS_TO_RUN+=("$PROJECT_DIR/scripts/$s")
+done
+
+PRE_SPEC=$(yq e ".hooks.specific[] | select(.distro==\"$DISTRO\" and .branch==\"$BRANCH\") | .pre_global_${HOOK_TYPE}[]?" "$CONFIG_FILE" || true)
+for s in $PRE_SPEC; do
+    [[ -n "$s" ]] && SCRIPTS_TO_RUN+=("$PROJECT_DIR/scripts/$s")
+done
+
+# 2. global hook (when not disabled)
+if [[ -z "$DISABLE_GLOBAL" ]]; then
+    GLOBAL_DIR="$GLOBAL_ROOT/$DISTRO/$BRANCH/${HOOK_TYPE}/"
+    if [[ -d "$GLOBAL_DIR" ]]; then
+        mapfile -d '' files < <(find "$GLOBAL_DIR" -maxdepth 1 -type f -executable -print0)
+        IFS=$'\n' sorted=("$(printf "%s\n" "${files[@]}" | sort)")
+        SCRIPTS_TO_RUN+=("${sorted[@]}")
+    fi
+fi
+
+# 3. post_global
+POST_UNI=$(yq e ".hooks.universal.post_global_${HOOK_TYPE}[]?" "$CONFIG_FILE" || true)
+for s in $POST_UNI; do
+    [[ -n "$s" ]] && SCRIPTS_TO_RUN+=("$PROJECT_DIR/scripts/$s")
+done
+
+POST_SPEC=$(yq e ".hooks.specific[] | select(.distro==\"$DISTRO\" and .branch==\"$BRANCH\") | .post_global_${HOOK_TYPE}[]?" "$CONFIG_FILE" || true)
+for s in $POST_SPEC; do
+    [[ -n "$s" ]] && SCRIPTS_TO_RUN+=("$PROJECT_DIR/scripts/$s")
+done
+
+# OUTPUT
+echo "=== Hook execution order for type: $HOOK_TYPE ==="
+for script in "${SCRIPTS_TO_RUN[@]}"; do
+    echo "$script"
+done
+
+# EXECUTE
+if $EXECUTE; then
+    for script in "${SCRIPTS_TO_RUN[@]}"; do
+        if [[ ! -x "$script" ]]; then
+            echo ">>> Error: Script $script not found or not executable" >&2
+            exit 1
+        fi
+        echo ">>> Running: $script"
+        "$script"
+    done
+fi

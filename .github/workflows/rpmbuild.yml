@@ -17,6 +17,16 @@ on:
       matrix-file:
         required: true
         type: string
+      hostname:
+        required: true
+        type: string
+      build-srpm:
+        required: false
+        type: boolean
+        default: false
+      hooks-dir:
+        required: true
+        type: string
 
     secrets:
       RCLONE_CONFIG_SECTION:
@@ -97,18 +107,134 @@ jobs:
     needs: prepare
     if: ${{ join(fromJson(needs.prepare.outputs.matrix)) != '' }}
     runs-on: ubuntu-24.04
+    container:
+      image: ${{ matrix.image }}
+      options: --hostname ${{ inputs.hostname }}
     strategy:
       fail-fast: false
       matrix:
         include: ${{ fromJson(needs.prepare.outputs.matrix) }}
 
     steps:
-      - name: test matrix
+      - name: Print matrix info
         run: |
-          echo ${{ matrix.pkg }}
-          echo ${{ matrix.version }}
-          echo ${{ matrix.release }}
-          echo ${{ matrix.distro }}
-          echo ${{ matrix.branch }}
-          echo ${{ matrix.image }}
-          sleep 10s
+          echo "================= Build Matrix Info ================="
+          printf "%-10s | %s\n" "PKG"     "${{ matrix.pkg }}"
+          printf "%-10s | %s\n" "VERSION" "${{ matrix.version }}"
+          printf "%-10s | %s\n" "RELEASE" "${{ matrix.release }}"
+          printf "%-10s | %s\n" "DISTRO"  "${{ matrix.distro }}"
+          printf "%-10s | %s\n" "BRANCH"  "${{ matrix.branch }}"
+          printf "%-10s | %s\n" "IMAGE"   "${{ matrix.image }}"
+          echo "====================================================="
+
+      - name: Setup yq
+        uses: vegardit/gha-setup-yq@v1
+        with:
+          version: 4.47.1
+
+      - name: Run pre hooks
+        run: |
+          tools/scripts/hook -p specs/${{ inputs.pkg-path }}/${{ matrix.pkg }} -g specs/${{ inputs.hooks-dir }} -d ${{ matrix.distro }} -b ${{ matrix.branch }} -t prebuild -e
+
+      - name: Download sources
+        run: |
+          mkdir -p specs/${{ inputs.pkg-path }}/${{ matrix.pkg }}/source
+          tools/scripts/download -p specs/${{ inputs.pkg-path }}/${{ matrix.pkg }}
+
+      - name: Setup build tree
+        id: setup-tree
+        run: |
+          echo '%_topdir  %(echo $HOME)/rpmbuild' >> ~/.rpmmacros
+          rpmdev-setuptree
+          echo "topdir=$HOME/rpmbuild" >> $GITHUB_OUTPUT
+
+      - name: Build RPM
+        env:
+          BUILD_SRPM: ${{ inputs.build-srpm }}
+        run: |
+          mkdir -vp ~/BUILD_RPMS/x86_64
+          mkdir -vp ~/BUILD_RPMS/noarch
+          cp -v specs/${{ inputs.pkg-path }}/${{ matrix.pkg }}/${{ matrix.pkg }}.spec ${{ steps.setup-tree.outputs.topdir }}/SPECS
+          cp -v specs/${{ inputs.pkg-path }}/${{ matrix.pkg }}/source/* ${{ steps.setup-tree.outputs.topdir }}/SOURCES
+
+          if [ "$BUILD_SRPM" == true ]; then
+            rpmbuild -ba ${{ steps.setup-tree.outputs.topdir }}/SPECS/${{ matrix.pkg }}.spec
+
+            mkdir -vp ~/BUILD_SRPMS
+
+            find ${{ steps.setup-tree.outputs.topdir }}/RPMS/x86_64 -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec cp -v {} ~/BUILD_RPMS/x86_64 +
+            find ${{ steps.setup-tree.outputs.topdir }}/RPMS/noarch -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec cp -v {} ~/BUILD_RPMS/noarch +
+
+            find ${{ steps.setup-tree.outputs.topdir }}/SRPMS -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec cp -v {} ~/BUILD_SRPMS +
+          else
+            rpmbuild -bb ${{ steps.setup-tree.outputs.topdir }}/SPECS/${{ matrix.pkg }}.spec
+
+            find ${{ steps.setup-tree.outputs.topdir }}/RPMS/x86_64 -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec cp -v {} ~/BUILD_RPMS/x86_64 +
+            find ${{ steps.setup-tree.outputs.topdir }}/RPMS/noarch -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec cp -v {} ~/BUILD_RPMS/noarch +
+          fi
+
+      - name: Run post hooks
+        run: |
+          tools/scripts/hook -p specs/${{ inputs.pkg-path }}/${{ matrix.pkg }} -g specs/${{ inputs.hooks-dir }} -d ${{ matrix.distro }} -b ${{ matrix.branch }} -t postbuild -e
+
+      - name: Setup GPG
+        run: |
+          if dnf list available gpg2; then
+            dnf install gpg2
+          elif dnf list available gnupg2; then
+            dnf install gnupg2
+          elif dnf list available gnupg; then
+            dnf install gnupg
+          elif dnf list available gpg; then
+            dnf install gpg
+          else
+            echo "Error: can't install GPG"
+            exit 1
+          fi
+
+          echo "Importing GPG key"
+          echo "$GPG_SEC" | base64 -d | gpg --import --batch --yes
+
+      - name: Sign RPM
+        env:
+          GPG_SECRET_ID: ${{ secrets.GPG_SECRET_ID }}
+          BUILD_SRPM: ${{ inputs.build-srpm }}
+        run: |
+          find "$HOME/BUILD_RPMS/x86_64" -name "*.rpm" -type f -exec rpmsign --addsign {} --define "_gpg_name $GPG_SEC_ID" \;
+          find "$HOME/BUILD_RPMS/noarch" -name "*.rpm" -type f -exec rpmsign --addsign {} --define "_gpg_name $GPG_SEC_ID" \;
+
+          if [ "$BUILD_SRPM" == true ]; then
+            rpmsign --addsign ~/BUILD_SRPMS/*.rpm --define "_gpg_name $GPG_SEC_ID"
+          fi
+
+          gpg --batch --yes --delete-secret-keys "$GPG_SEC_ID"
+
+      - name: Setup Rclone
+        uses: AnimMouse/setup-rclone@v1
+
+      - name: Upload to repo
+        env:
+          RCLONE_CONFIG_SECTION: ${{ secrets.RCLONE_CONFIG_SECTION }}
+          RCLONE_REPO_NAME: ${{ inputs.rclone-repo-name }}
+        run: |
+          echo "$RCLONE_CONFIG_SECTION" | base64 -d > ~/.config/rclone/rclone.conf
+
+          # rclone copy takes the 2nd argument as the target directory
+          # It recursively creates it if it doesn't exist
+          # So, we just copy it
+          rclone copy ~/BUILD_RPMS/x86_64 ${RCLONE_REPO_NAME}:/${{ matrix.distro }}/${{ matrix.branch }}/x86_64 --progress
+          rclone copy ~/BUILD_RPMS/noarch ${RCLONE_REPO_NAME}:/${{ matrix.distro }}/${{ matrix.branch }}/noarch --progress
+
+          if [ "$BUILD_SRPM" == true ]; then
+            rclone copy ~/BUILD_SRPMS ${RCLONE_REPO_NAME}:/${{ matrix.distro }}/${{ matrix.branch }}/source --progress
+          fi
+
+          shred -u ~/.config/rclone/rclone.conf
+
+      - name: Clean environment
+        if: always()
+        env:
+          GPG_SECRET_ID: ${{ secrets.GPG_SECRET_ID }}
+        run: |
+          test -e ~/.config/rclone/rclone.conf && shred -u ~/.config/rclone/rclone.conf
+          gpg --batch --yes --delete-secret-keys "$GPG_SEC_ID" || true
