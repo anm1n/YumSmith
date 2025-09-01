@@ -116,6 +116,20 @@ jobs:
         include: ${{ fromJson(needs.prepare.outputs.matrix) }}
 
     steps:
+      - name: Checkout tools repository
+        uses: actions/checkout@v5
+        with:
+          repository: anm1n/yum2
+          path: tools
+          fetch-depth: 1
+          token: ${{ secrets.TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Checkout SPECs repository
+        uses: actions/checkout@v5
+        with:
+          path: specs
+          fetch-depth: 1
+
       - name: Print matrix info
         run: |
           echo "================= Build Matrix Info ================="
