@@ -89,6 +89,6 @@ if $EXECUTE; then
             exit 1
         fi
         echo ">>> Running: $script"
-        "$script"
+        "$script" -s "${PROJECT_DIR}/$(basename "$PROJECT_DIR").spec"
     done
 fi
