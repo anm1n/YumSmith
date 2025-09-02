@@ -162,8 +162,10 @@ jobs:
           if command -v dnf > /dev/null; then
             dnf install -y findutils
           else
-            zypper ref
-            zypper --non-interactive install findutils
+            zypper --non-interactive ref
+            # for whatever reason
+            # dnf not work when using libcurl-mini4 instead of libcurl4
+            zypper --non-interactive install findutils libcurl4
           fi
 
       - name: Cache prebuild yq
