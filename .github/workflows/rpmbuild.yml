@@ -165,6 +165,8 @@ jobs:
         id: setup-tree
         run: |
           echo '%_topdir  %(echo $HOME)/rpmbuild' >> ~/.rpmmacros
+          echo 'debug_package %{nil}' >> ~/.rpmmacros
+          echo '%source_date_epoch_from_changelog %{nil}' >> ~/.rpmmacros
           rpmdev-setuptree
           echo "topdir=$HOME/rpmbuild" >> $GITHUB_OUTPUT
 
