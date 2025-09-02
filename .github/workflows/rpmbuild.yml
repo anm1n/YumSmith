@@ -237,17 +237,21 @@ jobs:
         env:
           GPG_SECRET: ${{ secrets.GPG_SECRET }}
         run: |
-          if dnf list available gpg2; then
-            dnf install gpg2
-          elif dnf list available gnupg2; then
-            dnf install gnupg2
-          elif dnf list available gnupg; then
-            dnf install gnupg
-          elif dnf list available gpg; then
-            dnf install gpg
+          if command -v gpg > /dev/null; then
+            echo "GPG is already in PATH"
           else
-            echo "Error: can't install GPG"
-            exit 1
+            if dnf list available gpg2; then
+              dnf install gpg2
+            elif dnf list available gnupg2; then
+              dnf install gnupg2
+            elif dnf list available gnupg; then
+              dnf install gnupg
+            elif dnf list available gpg; then
+              dnf install gpg
+            else
+              echo "Error: can't install GPG"
+              exit 1
+            fi
           fi
 
           echo "Importing GPG key"
