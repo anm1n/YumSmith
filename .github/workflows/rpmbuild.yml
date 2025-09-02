@@ -62,11 +62,21 @@ jobs:
           path: specs
           fetch-depth: 1
 
+      - name: Cache prebuild Rclone deb
+        uses: actions/cache@v4
+        with:
+          path: rclone.deb
+          key: rclone-deb-1.71.0
+
       - name: Setup Rclone
         run: |
-          sudo apt update
-          sudo apt install rclone
-          mkdir -p ~/.config/rclone
+          if [ ! -f rclone.deb ]; then
+            curl -o rclone.deb https://downloads.rclone.org/v1.71.0/rclone-v1.71.0-linux-amd64.deb
+          fi
+
+          echo '53e35eac5cb5e6e4a9cc04ffe28d5ace695fd335a156f8d17b11df37739b725f  rclone.deb' | sha256sum -c
+          sudo dpkg -i rclone.deb
+          mkdir -vp ~/.config/rclone
 
       - name: Pull status.json
         env:
@@ -237,8 +247,21 @@ jobs:
 
           gpg --batch --yes --delete-secret-keys "$GPG_SECRET_ID"
 
+      - name: Cache prebuild Rclone rpm
+        uses: actions/cache@v4
+        with:
+          path: rclone.rpm
+          key: rclone-rpm-1.71.0
+
       - name: Setup Rclone
-        uses: AnimMouse/setup-rclone@v1
+        run: |
+          if [ ! -f rclone.rpm ]; then
+            curl -o rclone.rpm https://downloads.rclone.org/v1.71.0/rclone-v1.71.0-linux-amd64.rpm
+          fi
+
+          echo '7dcae58067ee30da79fe0be06fcdc0c7b163aa23d13fd3c54043a3288ade75cc  rclone.rpm' | sha256sum -c
+          rpm -i rclone.rpm
+          mkdir -vp ~/.config/rclone
 
       - name: Upload to repo
         env:
