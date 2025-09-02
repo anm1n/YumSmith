@@ -185,18 +185,18 @@ jobs:
             rpmbuild -ba ${{ steps.setup-tree.outputs.topdir }}/SPECS/${{ matrix.pkg }}.spec
 
             mkdir -vp ~/BUILD_SRPMS
-            find ${{ steps.setup-tree.outputs.topdir }}/SRPMS -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec cp -v {} ~/BUILD_SRPMS +
+            find ${{ steps.setup-tree.outputs.topdir }}/SRPMS -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec cp -v {} ~/BUILD_SRPMS \;
           else
             rpmbuild -bb ${{ steps.setup-tree.outputs.topdir }}/SPECS/${{ matrix.pkg }}.spec
           fi
 
           # copy RPMs for later operations
           if [ -d ${{ steps.setup-tree.outputs.topdir }}/RPMS/x86_64 ]; then
-            find ${{ steps.setup-tree.outputs.topdir }}/RPMS/x86_64 -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec cp -v {} ~/BUILD_RPMS/x86_64 +
+            find ${{ steps.setup-tree.outputs.topdir }}/RPMS/x86_64 -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec cp -v {} ~/BUILD_RPMS/x86_64 \;
           fi
 
           if [ -d ${{ steps.setup-tree.outputs.topdir }}/RPMS/noarch ]; then
-            find ${{ steps.setup-tree.outputs.topdir }}/RPMS/noarch -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec cp -v {} ~/BUILD_RPMS/noarch +
+            find ${{ steps.setup-tree.outputs.topdir }}/RPMS/noarch -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec cp -v {} ~/BUILD_RPMS/noarch \;
           fi
 
       - name: Run post hooks
