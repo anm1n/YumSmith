@@ -291,6 +291,7 @@ jobs:
         env:
           RCLONE_CONFIG_SECTION: ${{ secrets.RCLONE_CONFIG_SECTION }}
           RCLONE_REPO_NAME: ${{ inputs.rclone-repo-name }}
+          BUILD_SRPM: ${{ inputs.build-srpm }}
         run: |
           echo "$RCLONE_CONFIG_SECTION" | base64 -d > ~/.config/rclone/rclone.conf
 
