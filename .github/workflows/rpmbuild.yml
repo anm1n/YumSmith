@@ -157,10 +157,144 @@ jobs:
           printf "%-10s | %s\n" "IMAGE"   "${{ matrix.image }}"
           echo "====================================================="
 
+      - name: Ultra Verbose Debug
+        run: |
+          echo "===== BASIC ENV ====="
+          env | sort
+          echo
+
+          echo "===== WHOAMI / UID / GID ====="
+          id
+          whoami || true
+          echo
+
+          echo "===== PATH ====="
+          echo "$PATH"
+          echo
+
+          echo "===== SHELL LOCATIONS ====="
+          which sh || true
+          which bash || true
+          ls -l /bin/sh /bin/bash || true
+          file /bin/sh /bin/bash || true
+          echo
+
+          echo "===== SHELL DEPENDENCIES ====="
+          ldd /bin/sh || true
+          ldd /bin/bash || true
+          echo
+
+          echo "===== SHELL EXEC TEST ====="
+          /bin/sh -c 'echo "sh works"' || echo "sh failed"
+          /bin/bash -c 'echo "bash works"' || echo "bash failed"
+          echo
+
+          echo "===== MOUNT POINTS ====="
+          mount || true
+          echo
+
+          echo "===== FILESYSTEM CHECKS ====="
+          df -h
+          echo
+
+          echo "===== LIBRARY PATH ====="
+          echo "$LD_LIBRARY_PATH"
+          echo
+
+          echo "===== PROCESS LIST ====="
+          ps -ef
+          echo
+
+          echo "===== OPEN FILES (TOP 50) ====="
+          lsof 2>/dev/null | head -n 50 || true
+          echo
+
+          echo "===== /lib64 and /usr/lib64 CONTENTS ====="
+          ls -l /lib64 | head -n 50
+          ls -l /usr/lib64 | head -n 50
+          echo
+
+          echo "===== /etc/os-release ====="
+          cat /etc/os-release || true
+          echo
+
+          echo "===== DOCKER INFO (if available) ====="
+          docker info 2>/dev/null || echo "No docker info"
+          echo
+
+          echo "===== FINISHED DEBUG DUMP ====="
+
       - name: Setup yq
         uses: vegardit/gha-setup-yq@v1
         with:
           version: 4.47.1
+
+      - name: Ultra Verbose Debug
+        run: |
+          echo "===== BASIC ENV ====="
+          env | sort
+          echo
+
+          echo "===== WHOAMI / UID / GID ====="
+          id
+          whoami || true
+          echo
+
+          echo "===== PATH ====="
+          echo "$PATH"
+          echo
+
+          echo "===== SHELL LOCATIONS ====="
+          which sh || true
+          which bash || true
+          ls -l /bin/sh /bin/bash || true
+          file /bin/sh /bin/bash || true
+          echo
+
+          echo "===== SHELL DEPENDENCIES ====="
+          ldd /bin/sh || true
+          ldd /bin/bash || true
+          echo
+
+          echo "===== SHELL EXEC TEST ====="
+          /bin/sh -c 'echo "sh works"' || echo "sh failed"
+          /bin/bash -c 'echo "bash works"' || echo "bash failed"
+          echo
+
+          echo "===== MOUNT POINTS ====="
+          mount || true
+          echo
+
+          echo "===== FILESYSTEM CHECKS ====="
+          df -h
+          echo
+
+          echo "===== LIBRARY PATH ====="
+          echo "$LD_LIBRARY_PATH"
+          echo
+
+          echo "===== PROCESS LIST ====="
+          ps -ef
+          echo
+
+          echo "===== OPEN FILES (TOP 50) ====="
+          lsof 2>/dev/null | head -n 50 || true
+          echo
+
+          echo "===== /lib64 and /usr/lib64 CONTENTS ====="
+          ls -l /lib64 | head -n 50
+          ls -l /usr/lib64 | head -n 50
+          echo
+
+          echo "===== /etc/os-release ====="
+          cat /etc/os-release || true
+          echo
+
+          echo "===== DOCKER INFO (if available) ====="
+          docker info 2>/dev/null || echo "No docker info"
+          echo
+
+          echo "===== FINISHED DEBUG DUMP =====
 
       - name: Run pre hooks
         run: |
