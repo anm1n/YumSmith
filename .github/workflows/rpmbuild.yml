@@ -157,6 +157,15 @@ jobs:
           printf "%-10s | %s\n" "IMAGE"   "${{ matrix.image }}"
           echo "====================================================="
 
+      - name: Setup basic environment
+        run: |
+          if command -v dnf > /dev/null; then
+            dnf install -y findutils
+          else
+            zypper ref
+            zypper --non-interactive install findutils
+          fi
+
       - name: Cache prebuild yq
         uses: actions/cache@v4
         with:
