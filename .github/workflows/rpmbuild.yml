@@ -165,7 +165,7 @@ jobs:
         id: setup-tree
         run: |
           echo '%_topdir  %(echo $HOME)/rpmbuild' >> ~/.rpmmacros
-          echo 'debug_package %{nil}' >> ~/.rpmmacros
+          echo '%debug_package %{nil}' >> ~/.rpmmacros
           echo '%source_date_epoch_from_changelog %{nil}' >> ~/.rpmmacros
           rpmdev-setuptree
           echo "topdir=$HOME/rpmbuild" >> $GITHUB_OUTPUT
@@ -179,19 +179,23 @@ jobs:
           cp -v specs/${{ inputs.pkg-path }}/${{ matrix.pkg }}/${{ matrix.pkg }}.spec ${{ steps.setup-tree.outputs.topdir }}/SPECS
           cp -v specs/${{ inputs.pkg-path }}/${{ matrix.pkg }}/source/* ${{ steps.setup-tree.outputs.topdir }}/SOURCES
 
+          # Build RPMs
+          # also copy SRPMs if build
           if [ "$BUILD_SRPM" == true ]; then
             rpmbuild -ba ${{ steps.setup-tree.outputs.topdir }}/SPECS/${{ matrix.pkg }}.spec
 
             mkdir -vp ~/BUILD_SRPMS
-
-            find ${{ steps.setup-tree.outputs.topdir }}/RPMS/x86_64 -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec cp -v {} ~/BUILD_RPMS/x86_64 +
-            find ${{ steps.setup-tree.outputs.topdir }}/RPMS/noarch -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec cp -v {} ~/BUILD_RPMS/noarch +
-
             find ${{ steps.setup-tree.outputs.topdir }}/SRPMS -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec cp -v {} ~/BUILD_SRPMS +
           else
             rpmbuild -bb ${{ steps.setup-tree.outputs.topdir }}/SPECS/${{ matrix.pkg }}.spec
+          fi
 
+          # copy RPMs for later operations
+          if [ -d ${{ steps.setup-tree.outputs.topdir }}/RPMS/x86_64 ]; then
             find ${{ steps.setup-tree.outputs.topdir }}/RPMS/x86_64 -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec cp -v {} ~/BUILD_RPMS/x86_64 +
+          fi
+
+          if [ -d ${{ steps.setup-tree.outputs.topdir }}/RPMS/noarch ]; then
             find ${{ steps.setup-tree.outputs.topdir }}/RPMS/noarch -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec cp -v {} ~/BUILD_RPMS/noarch +
           fi
 
