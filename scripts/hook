@@ -57,7 +57,8 @@ done
 if [[ -z "$DISABLE_GLOBAL" ]]; then
     GLOBAL_DIR="$GLOBAL_ROOT/$DISTRO/$BRANCH/${HOOK_TYPE}/"
     if [[ -d "$GLOBAL_DIR" ]]; then
-        mapfile -d '' files < <(find "$GLOBAL_DIR" -maxdepth 1 -type f -executable -print0)
+        # symbolic link is allowed
+        mapfile -d '' files < <(find -L "$GLOBAL_DIR" -maxdepth 1 -type f -executable -print0)
         IFS=$'\n' sorted=("$(printf "%s\n" "${files[@]}" | sort)")
         SCRIPTS_TO_RUN+=("${sorted[@]}")
     fi
