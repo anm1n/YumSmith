@@ -213,18 +213,18 @@ jobs:
           fi
 
           echo "Importing GPG key"
-          echo "$GPG_SEC" | base64 -d | gpg --import --batch --yes
+          echo "$GPG_SECRET" | base64 -d | gpg --import --batch --yes
 
       - name: Sign RPM
         env:
           GPG_SECRET_ID: ${{ secrets.GPG_SECRET_ID }}
           BUILD_SRPM: ${{ inputs.build-srpm }}
         run: |
-          find "$HOME/BUILD_RPMS/x86_64" -name "*.rpm" -type f -exec rpmsign --addsign {} --define "_gpg_name $GPG_SEC_ID" \;
-          find "$HOME/BUILD_RPMS/noarch" -name "*.rpm" -type f -exec rpmsign --addsign {} --define "_gpg_name $GPG_SEC_ID" \;
+          find "$HOME/BUILD_RPMS/x86_64" -name "*.rpm" -type f -exec rpmsign --addsign {} --define "_gpg_name $GPG_SECRET_ID" \;
+          find "$HOME/BUILD_RPMS/noarch" -name "*.rpm" -type f -exec rpmsign --addsign {} --define "_gpg_name $GPG_SECRET_ID" \;
 
           if [ "$BUILD_SRPM" == true ]; then
-            rpmsign --addsign ~/BUILD_SRPMS/*.rpm --define "_gpg_name $GPG_SEC_ID"
+            rpmsign --addsign ~/BUILD_SRPMS/*.rpm --define "_gpg_name $GPG_SECRET_ID"
           fi
 
           gpg --batch --yes --delete-secret-keys "$GPG_SEC_ID"
@@ -257,4 +257,4 @@ jobs:
           GPG_SECRET_ID: ${{ secrets.GPG_SECRET_ID }}
         run: |
           test -e ~/.config/rclone/rclone.conf && shred -u ~/.config/rclone/rclone.conf
-          gpg --batch --yes --delete-secret-keys "$GPG_SEC_ID" || true
+          gpg --batch --yes --delete-secret-keys "$GPG_SECRET_ID" || true

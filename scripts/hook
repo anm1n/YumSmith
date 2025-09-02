@@ -84,7 +84,7 @@ done
 # EXECUTE
 if $EXECUTE; then
     for script in "${SCRIPTS_TO_RUN[@]}"; do
-        if [[ ! -x "$script" ]]; then
+        if [[ ! -x $(realpath "$script") ]]; then
             echo ">>> Error: Script $script not found or not executable" >&2
             exit 1
         fi
