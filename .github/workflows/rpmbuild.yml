@@ -204,6 +204,8 @@ jobs:
           tools/scripts/hook -p specs/${{ inputs.pkg-path }}/${{ matrix.pkg }} -g specs/${{ inputs.hooks-dir }} -d ${{ matrix.distro }} -b ${{ matrix.branch }} -t postbuild -e
 
       - name: Setup GPG
+        env:
+          GPG_SECRET: ${{ secrets.GPG_SECRET }}
         run: |
           if dnf list available gpg2; then
             dnf install gpg2
