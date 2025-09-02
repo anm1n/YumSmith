@@ -235,7 +235,7 @@ jobs:
             rpmsign --addsign ~/BUILD_SRPMS/*.rpm --define "_gpg_name $GPG_SECRET_ID"
           fi
 
-          gpg --batch --yes --delete-secret-keys "$GPG_SEC_ID"
+          gpg --batch --yes --delete-secret-keys "$GPG_SECRET_ID"
 
       - name: Setup Rclone
         uses: AnimMouse/setup-rclone@v1
