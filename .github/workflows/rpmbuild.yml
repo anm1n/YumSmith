@@ -157,18 +157,19 @@ jobs:
           printf "%-10s | %s\n" "IMAGE"   "${{ matrix.image }}"
           echo "====================================================="
 
-      - name: Debug
-        run: |
-          echo $PATH
+      - name: Cache prebuild yq
+        uses: actions/cache@v4
+        with:
+          path: yq
+          key: yq-amd64-4.47.1
 
       - name: Setup yq
-        uses: vegardit/gha-setup-yq@v1
-        with:
-          version: 4.47.1
-
-      - name: Ultra Verbose Debug
         run: |
-          echo $PATH
+          if [ ! -f yq ]; then
+            curl -o yq https://github.com/mikefarah/yq/releases/download/v4.47.1/yq_linux_amd64
+          fi
+          echo '0fb28c6680193c41b364193d0c0fc4a03177aecde51cfc04d506b1517158c2fb  yq' | sha256sum -c
+          install -m 755 yq /usr/bin/yq
 
       - name: Run pre hooks
         run: |
