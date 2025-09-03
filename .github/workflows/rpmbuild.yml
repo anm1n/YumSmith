@@ -316,8 +316,9 @@ jobs:
           gpg --batch --yes --delete-secret-keys "$GPG_SECRET_ID" || true
 
   gen-metadata:
-    runs-on: ubuntu-24.04
     needs: build
+    if: always()
+    runs-on: ubuntu-24.04
     steps:
       - name: Trigger repodata update
         uses: benc-uk/workflow-dispatch@v1
