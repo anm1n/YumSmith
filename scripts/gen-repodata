@@ -38,7 +38,13 @@ find "$ROOT_DIR" -mindepth 2 -maxdepth 2 -type d | while read -r second_level; d
     for arch in noarch x86_64 source; do
         if [ -d "$second_level/$arch" ]; then
             echo "🚀 Found $arch in $second_level, running createrepo..."
-            createrepo "$second_level"
+            if command -v createrepo_c > /dev/null; then
+                createrepo_c "$second_level"
+            elif command -v createrepo > /dev/null; then
+                createrepo "$second_level"
+            else
+                echo "❌ Error: createrepo or createrepo_c not found in PATH"
+            fi
 
             # If GPG key is provided, sign repomd.xml
             if [ -n "$GPG_SEC_ID" ]; then
