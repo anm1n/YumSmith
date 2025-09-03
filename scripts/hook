@@ -55,7 +55,7 @@ done
 
 # 2. global hook (when not disabled)
 if [[ -z "$DISABLE_GLOBAL" ]]; then
-    GLOBAL_DIR="$GLOBAL_ROOT/$DISTRO/$BRANCH/${HOOK_TYPE}/"
+    GLOBAL_DIR="$GLOBAL_ROOT/$HOOK_TYPE/$DISTRO/${BRANCH}/"
     if [[ -d "$GLOBAL_DIR" ]]; then
         # symbolic link is allowed
         mapfile -d '' files < <(find -L "$GLOBAL_DIR" -maxdepth 1 -type f -executable -print0)
