@@ -32,39 +32,54 @@ jobs:
           fetch-depth: 1
           token: ${{ secrets.TOKEN || secrets.GITHUB_TOKEN }}
 
-      - name: Install Rclone, GPG, createrepo
+      - name: Install GPG, createrepo
         run: |
           sudo apt update
-          sudo apt install -y rclone gpg createrepo-c dnf
+          sudo apt install -y gpg createrepo-c dnf
+
+      - name: Cache prebuild Rclone deb
+        uses: actions/cache@v4
+        with:
+          path: rclone.deb
+          key: rclone-deb-1.71.0
+
+      - name: Install Rclone
+        run: |
+          if [ ! -f rclone.deb ]; then
+            curl -o rclone.deb https://downloads.rclone.org/v1.71.0/rclone-v1.71.0-linux-amd64.deb
+          fi
+
+          echo '53e35eac5cb5e6e4a9cc04ffe28d5ace695fd335a156f8d17b11df37739b725f  rclone.deb' | sha256sum -c
+          sudo dpkg -i rclone.deb
+          mkdir -vp ~/.config/rclone
 
       - name: Pull yum repo
         env:
           RCLONE_CONFIG_VAL: ${{ secrets.RCLONE_CONFIG_SECTION }}
           RCLONE_REPO_NAME: ${{ inputs.rclone-repo-name }}
         run: |
-          mkdir -p ~/.config/rclone
           echo "$RCLONE_CONFIG_VAL" | base64 -d > ~/.config/rclone/rclone.conf
-          mkdir copy
+          mkdir -v copy
           rclone copy ${RCLONE_REPO_NAME}:/ copy/ --progress
           shred -u ~/.config/rclone/rclone.conf
 
-      - name: Update yum repo metadata
-        run: |
-          test -e copy/repodata/repomd.xml && rm -v copy/repodata/*
-          createrepo_c copy/
-
-      - name: Sign repomd.xml
+      - name: Import GPG key
         env:
           GPG_SEC: ${{ secrets.GPG_SECRET }}
+        run: |
+          echo "$GPG_SEC" | base64 -d | gpg --import --batch --yes
+
+      - name: Generate yum repodata, also sign repomd.xml
+        env:
           GPG_SEC_ID: ${{ secrets.GPG_SECRET_ID }}
         run: |
-          echo "import GPG key"
-          echo "$GPG_SEC" | base64 -d | gpg --import --batch --yes
-          gpg --detach-sign --armor --batch --yes --local-user "$GPG_SEC_ID" "copy/repodata/repomd.xml"
+          tools/scripts/gen-repodata -r copy -s "$GPG_SEC_ID"
           gpg --batch --yes --delete-secret-keys "$GPG_SEC_ID"
 
       - name: Generate status.json
-        run: tools/scripts/gen-status -r "$(pwd)/copy" -o copy/repodata/status.json
+        run: |
+          tools/scripts/gen-status -r "$(pwd)/copy" -o copy/status.json
+          cat copy/status.json
 
       - name: Push metadata
         env:

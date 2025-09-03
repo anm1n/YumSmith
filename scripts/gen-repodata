@@ -1,0 +1,60 @@
+#!/bin/bash
+set -e
+# Parse command-line arguments using getopts
+while getopts ":r:s:" opt; do
+    case $opt in
+        r)
+            ROOT_DIR="$OPTARG"
+            ;;
+        s)
+            GPG_SEC_ID="$OPTARG"
+            ;;
+        \?)
+            echo "❌ Invalid option: -$OPTARG" >&2
+            exit 1
+            ;;
+        :)
+            echo "⚠️ Option -$OPTARG requires an argument" >&2
+            exit 1
+            ;;
+    esac
+done
+
+# Check if -r argument is provided
+if [ -z "$ROOT_DIR" ]; then
+    echo "ℹ️ Usage: $0 -r ROOT_DIR [-s GPG_KEY_FINGERPRINT]"
+    exit 1
+fi
+
+# Check if the root directory exists
+if [ ! -d "$ROOT_DIR" ]; then
+    echo "❌ Error: Root directory $ROOT_DIR does not exist"
+    exit 1
+fi
+
+# Search for second-level directories
+find "$ROOT_DIR" -mindepth 2 -maxdepth 2 -type d | while read -r second_level; do
+    # Check if noarch, x86_64, or source directory exists inside
+    for arch in noarch x86_64 source; do
+        if [ -d "$second_level/$arch" ]; then
+            echo "🚀 Found $arch in $second_level, running createrepo..."
+            createrepo "$second_level"
+
+            # If GPG key is provided, sign repomd.xml
+            if [ -n "$GPG_SEC_ID" ]; then
+                REPO_MD="$second_level/repodata/repomd.xml"
+                if [ -f "$REPO_MD" ]; then
+                    echo "✍️  Signing $REPO_MD with GPG key $GPG_SEC_ID..."
+                    gpg --detach-sign --armor --batch --yes \
+                        --local-user "$GPG_SEC_ID" "$REPO_MD"
+                else
+                    echo "⚠️  Warning: $REPO_MD not found, skipping signature."
+                fi
+            fi
+
+            break  # Run createrepo only once per second-level directory
+        fi
+    done
+done
+
+echo "✅ All matching directories processed."

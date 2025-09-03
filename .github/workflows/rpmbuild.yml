@@ -85,8 +85,8 @@ jobs:
         run: |
           echo "$RCLONE_CONFIG_SECTION" | base64 -d > ~/.config/rclone/rclone.conf
 
-          if rclone ls ${RCLONE_REPO_NAME}:/repodata/status.json > /dev/null ; then
-            rclone copy ${RCLONE_REPO_NAME}:/repodata/status.json .
+          if rclone ls ${RCLONE_REPO_NAME}:/status.json > /dev/null ; then
+            rclone copy ${RCLONE_REPO_NAME}:/status.json .
           else
             echo "Warn: status.json not exist on $RCLONE_REPO_NAME"
             echo "Warn: will rebuild everything"
@@ -314,3 +314,12 @@ jobs:
         run: |
           test -e ~/.config/rclone/rclone.conf && shred -u ~/.config/rclone/rclone.conf
           gpg --batch --yes --delete-secret-keys "$GPG_SECRET_ID" || true
+
+  gen-metadata:
+    runs-on: ubuntu-24.04
+    needs: build
+    steps:
+      - name: Trigger repodata update
+        uses: benc-uk/workflow-dispatch@v1
+        with:
+          workflow: ${{ inputs.metadata-workflow-name }}
