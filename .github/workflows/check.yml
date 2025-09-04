@@ -78,8 +78,8 @@ jobs:
       - name: Execute the check hook
         if: ${{ env.NEED_CHECK == 'true' }}
         env:
-          ROOT_DIR: ${{ github.pkg-path }}
-          HOOK_DIR: ${{ github.hooks-dir }}
+          ROOT_DIR: ${{ inputs.pkg-path }}
+          HOOK_DIR: ${{ inputs.hooks-dir }}
         run: |
           if [[ -z "${ROOT_DIR:-}" || -z "${HOOK_DIR:-}" ]]; then
               echo "❌ Error: env ROOT_DIR and HOOK_DIR is required" >&2
