@@ -317,7 +317,7 @@ jobs:
 
   gen-metadata:
     needs: build
-    if: always()
+    if: always() && needs.build.result != 'skipped'
     runs-on: ubuntu-24.04
     steps:
       - name: Trigger repodata update
