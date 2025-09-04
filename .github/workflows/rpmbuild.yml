@@ -35,8 +35,6 @@ on:
         required: true
       GPG_SECRET:
         required: true
-      GPG_SECRET_ID:
-        required: true
       TOKEN:
         required: false
 
@@ -235,6 +233,7 @@ jobs:
           tools/scripts/hook -p specs/${{ inputs.root-dir }}/${{ matrix.pkg }} -g specs/${{ inputs.hooks-dir }} -d ${{ matrix.distro }} -b ${{ matrix.branch }} -t postbuild -e
 
       - name: Setup GPG
+        id: import-key
         env:
           GPG_SECRET: ${{ secrets.GPG_SECRET }}
         run: |
@@ -255,12 +254,15 @@ jobs:
             fi
           fi
 
-          echo "Importing GPG key"
+          echo ">>> Importing GPG key"
           echo "$GPG_SECRET" | base64 -d | gpg --import --batch --yes
+          FINGERPRINT=$(gpg --list-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}')
+          echo ">>> Fingerprint: $FINGERPRINT"
+          echo "id=$FINGERPRINT" >> $GITHUB_OUTPUT
 
       - name: Sign RPM
         env:
-          GPG_SECRET_ID: ${{ secrets.GPG_SECRET_ID }}
+          GPG_SECRET_ID: ${{ steps.import-key.outputs.id }}
           BUILD_SRPM: ${{ inputs.build-srpm }}
         run: |
           find "$HOME/BUILD_RPMS/x86_64" -name "*.rpm" -type f -exec rpmsign --addsign {} --define "_gpg_name $GPG_SECRET_ID" \;
@@ -311,7 +313,7 @@ jobs:
       - name: Clean environment
         if: always()
         env:
-          GPG_SECRET_ID: ${{ secrets.GPG_SECRET_ID }}
+          GPG_SECRET_ID: ${{ steps.import-key.outputs.id }}
         run: |
           test -e ~/.config/rclone/rclone.conf && shred -u ~/.config/rclone/rclone.conf
           gpg --batch --yes --delete-secret-keys "$GPG_SECRET_ID" || true
