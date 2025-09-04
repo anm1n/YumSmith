@@ -40,7 +40,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ! gh label list --limit 100 --json name --jq '.[] | select(.name=="${{ inputs.label-name }}")' | grep -q auto-pr; then
+          if ! gh label list --limit 100 --json name \
+            --jq ".[] | select(.name==\"${{ inputs.label-name }}\")" | grep -q ${{ inputs.label-name }} ; then
             gh label create ${{ inputs.label-name }} \
               --color "${{ inputs.label-color }}" \
               --description "Automatically version update check"
