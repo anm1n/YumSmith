@@ -150,13 +150,16 @@ jobs:
           git push origin ${{ inputs.update-branch-name }}
 
       - name: Create a pull request
-        if: ${{ env.NEED_CHECK == 'true' && env.NEED_PUSH == 'true' }}
+        if: ${{ env.NEED_CHECK == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr create \
-            --base ${{ github.event.repository.default_branch }} \
-            --head ${{ inputs.update-branch-name }} \
-            --title "batch update packages" \
-            --body "To Be Continued..."
-            --label ${{ inputs.label-name }}
+          # Create a PR only if the update branch is ahead of the main branch
+          if [ "$(git rev-list --count origin/${{ github.event.repository.default_branch }}..${{ inputs.update-branch-name }})" -gt 0 ]; then
+            gh pr create \
+              --base ${{ github.event.repository.default_branch }} \
+              --head ${{ inputs.update-branch-name }} \
+              --title "batch update packages" \
+              --body "To Be Continued..."
+              --label ${{ inputs.label-name }}
+          fi
