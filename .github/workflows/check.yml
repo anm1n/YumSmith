@@ -157,9 +157,9 @@ jobs:
           # Create a PR only if the update branch is ahead of the main branch
           if [ "$(git rev-list --count origin/${{ github.event.repository.default_branch }}..${{ inputs.update-branch-name }})" -gt 0 ]; then
             gh pr create \
-              --base ${{ github.event.repository.default_branch }} \
-              --head ${{ inputs.update-branch-name }} \
+              --base  ${{ github.event.repository.default_branch }} \
+              --head  ${{ inputs.update-branch-name }} \
               --title "batch update packages" \
-              --body "To Be Continued..."
+              --body  "To Be Continued..." \
               --label ${{ inputs.label-name }}
           fi
