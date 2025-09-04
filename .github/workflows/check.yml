@@ -82,6 +82,7 @@ jobs:
           ROOT_DIR: ${{ inputs.pkg-path }}
           HOOK_DIR: ${{ inputs.hooks-dir }}
         run: |
+          set -x
           if [[ -z "${ROOT_DIR:-}" || -z "${HOOK_DIR:-}" ]]; then
               echo "❌ Error: env ROOT_DIR and HOOK_DIR is required" >&2
               exit 1
