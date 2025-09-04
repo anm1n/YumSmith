@@ -81,6 +81,7 @@ jobs:
         env:
           ROOT_DIR: ${{ inputs.pkg-path }}
           HOOK_DIR: ${{ inputs.hooks-dir }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [[ -z "${ROOT_DIR:-}" || -z "${HOOK_DIR:-}" ]]; then
               echo "❌ Error: env ROOT_DIR and HOOK_DIR is required" >&2
@@ -126,7 +127,8 @@ jobs:
 
               echo "▶️ Execute: $script_path -p $project_dir"
               if ! "$script_path" -p "$project_dir"; then
-                  echo "⚠️ Script execution failed (exit code: $?), continue processing the next project"
+                  exit_code=$?
+                  echo "⚠️ Script execution failed (exit code: $exit_code), continue processing the next project"
               fi
           done
 
