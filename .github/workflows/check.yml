@@ -1,0 +1,157 @@
+name: Check update
+on:
+  workflow_call:
+    inputs:
+      label-name:
+        type: string
+        required: false
+        default: auto-update
+      label-color:
+        type: string
+        required: false
+        default: 0E8A16
+      update-branch-name:
+        type: string
+        required: false
+        default: update
+      hooks-dir:
+        required: true
+        type: string
+      pkg-path:
+        required: true
+        type: string
+
+
+jobs:
+  job1:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Ensure label exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh label list --limit 100 --json name --jq '.[] | select(.name=="${{ inputs.label-name }}")' | grep -q auto-pr; then
+            gh label create ${{ inputs.label-name }} \
+              --color "${{ inputs.label-color }}" \
+              --description "Automatically version update check"
+          fi
+
+      - name: Checking for open PRs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          count=$(gh pr list \
+            --label "${{ inputs.label-name }}" \
+            --state open \
+            --json number \
+            --jq 'length')
+
+          echo "Found $count open PR(s) with label '${{ inputs.label-name }}'"
+
+          if [ "$count" -eq 0 ]; then
+            echo "Since there are no open PR, the check hook will be executed"
+            echo "NEED_CHECK=true" >> $GITHUB_ENV
+          else
+            echo "Warn: Before the open PR is processed, the check hook will be skipped"
+          fi
+
+      - name: Setup branch
+        if: ${{ env.NEED_CHECK == 'true' }}
+        run: |
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+          git checkout -b ${{ inputs.update-branch-name }}
+          git merge ${{ github.event.repository.default_branch }}
+
+
+      - name: Execute the check hook
+        if: ${{ env.NEED_CHECK == 'true' }}
+        env:
+          ROOT_DIR: ${{ github.pkg-path }}
+          HOOK_DIR: ${{ github.hooks-dir }}
+        run: |
+          if [[ -z "${ROOT_DIR:-}" || -z "${HOOK_DIR:-}" ]]; then
+              echo "❌ Error: env ROOT_DIR and HOOK_DIR is required" >&2
+              exit 1
+          fi
+
+          if ! command -v yq >/dev/null 2>&1; then
+              echo "❌ Error: yq not found in PATH" >&2
+              exit 1
+          fi
+
+          # for each project
+          find "$ROOT_DIR" -mindepth 1 -maxdepth 1 -type d | while read -r project_dir; do
+              echo "🔍 Processing project: $project_dir"
+
+              config_file=""
+              if [[ -f "$project_dir/config.yaml" ]]; then
+                  config_file="$project_dir/config.yaml"
+              elif [[ -f "$project_dir/config.yml" ]]; then
+                  config_file="$project_dir/config.yml"
+              else
+                  echo "⚠️ config.yaml / config.yml for $project_dir not found, skipping..."
+                  continue
+              fi
+
+              # hooks.universal.check in config
+              check_script=$(yq -r '.hooks.universal.check // empty' "$config_file" 2>/dev/null)
+              if [[ -z "$check_script" || "$check_script" == "null" ]]; then
+                  echo "ℹ️ Undefined field hooks.universal.check, skipping..."
+                  continue
+              fi
+
+              # Search for script (project_dir/scripts first)
+              script_path=""
+              if [[ -x "$project_dir/scripts/$check_script" ]]; then
+                  script_path="$project_dir/scripts/$check_script"
+              elif [[ -x "$HOOK_DIR/check/$check_script" ]]; then
+                  script_path="$HOOK_DIR/check/$check_script"
+              else
+                  echo "❌ Executable script not found: $check_script, skipping..."
+                  continue
+              fi
+
+              echo "▶️ Execute: $script_path -p $project_dir"
+              if ! "$script_path" -p "$project_dir"; then
+                  echo "⚠️ Script execution failed (exit code: $?), continue processing the next project"
+              fi
+          done
+
+
+      - name: Commit changes
+        if: ${{ env.NEED_CHECK == 'true' }}
+        run: |
+          # only commit when has diff on tracked files
+          if ! git diff --quiet; then
+            git commmit -a -m "chore: batch update packages"
+            echo "NEED_PUSH=true"  >> $GITHUB_ENV
+          else
+            echo "NEED_PUSH=false" >> $GITHUB_ENV
+          fi
+
+      - name: Push changes
+        if: ${{ env.NEED_CHECK == 'true' && env.NEED_PUSH == 'true' }}
+        run: |
+          git push origin ${{ inputs.update-branch-name }}
+
+      - name: Create a pull request
+        if: ${{ env.NEED_CHECK == 'true' && env.NEED_PUSH == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base ${{ github.event.repository.default_branch }} \
+            --head ${{ inputs.update-branch-name }} \
+            --title "batch update packages" \
+            --body "To Be Continued..."
+            --label ${{ inputs.label-name }}
