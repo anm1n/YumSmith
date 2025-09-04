@@ -82,7 +82,6 @@ jobs:
           ROOT_DIR: ${{ inputs.pkg-path }}
           HOOK_DIR: ${{ inputs.hooks-dir }}
         run: |
-          set -x
           if [[ -z "${ROOT_DIR:-}" || -z "${HOOK_DIR:-}" ]]; then
               echo "❌ Error: env ROOT_DIR and HOOK_DIR is required" >&2
               exit 1
@@ -108,7 +107,7 @@ jobs:
               fi
 
               # hooks.universal.check in config
-              check_script=$(yq -r '.hooks.universal.check // empty' "$config_file" 2>/dev/null)
+              check_script=$(yq -r '.hooks.universal.check // ""' "$config_file")
               if [[ -z "$check_script" || "$check_script" == "null" ]]; then
                   echo "ℹ️ Undefined field hooks.universal.check, skipping..."
                   continue
