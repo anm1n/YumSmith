@@ -55,7 +55,7 @@ for project_dir in "$ROOT_DIR"/*; do
 
         (( project_count=project_count + 1 ))
 
-        pkg_name=$(yq '.package' "$config_file")
+        pkg_name=$project_name
         version="$(grep 'Version:' --max-count=1 "${project_dir}/${project_name}.spec" | tr -s ' ' | cut -d ' ' -f2)"
         release="$(grep 'Release:' --max-count=1 "${project_dir}/${project_name}.spec" | tr -s ' ' | cut -d ' ' -f2)"
 
