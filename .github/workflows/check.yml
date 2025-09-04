@@ -138,7 +138,7 @@ jobs:
         run: |
           # only commit when has diff on tracked files
           if ! git diff --quiet; then
-            git commmit -a -m "chore: batch update packages"
+            git commit -a -m "chore: batch update packages"
             echo "NEED_PUSH=true"  >> $GITHUB_ENV
           else
             echo "NEED_PUSH=false" >> $GITHUB_ENV
