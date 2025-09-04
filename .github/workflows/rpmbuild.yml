@@ -2,31 +2,32 @@ name: Auto build RPMs
 on:
   workflow_call:
     inputs:
-      pkg-path:
+      root-dir:
         description: "A relative path where can found spec files"
         required: true
         type: string
-      rclone-repo-name:
-        description: "Section name of the yum repository in Rclone"
-        required: false
-        type: string
-        default: remote
-      metadata-workflow-name:
+      hooks-dir:
         required: true
         type: string
       matrix-file:
         required: true
         type: string
+      metadata-workflow-name:
+        required: true
+        type: string
       hostname:
         required: true
         type: string
+
+      rclone-repo-name:
+        description: "Section name of the yum repository in Rclone"
+        required: false
+        type: string
+        default: remote
       build-srpm:
         required: false
         type: boolean
         default: false
-      hooks-dir:
-        required: true
-        type: string
 
     secrets:
       RCLONE_CONFIG_SECTION:
@@ -97,7 +98,7 @@ jobs:
 
       - name: Gen spec.json
         run: |
-          tools/scripts/gen-spec -o spec.json -r specs/${{ inputs.pkg-path }} -m specs/${{ inputs.matrix-file }}
+          tools/scripts/gen-spec -o spec.json -r specs/${{ inputs.root-dir }} -m specs/${{ inputs.matrix-file }}
           cat spec.json
 
       - name: Gen diff.json
@@ -108,7 +109,7 @@ jobs:
       - name: Gen matrix
         id: gen-matrix
         run: |
-          tools/scripts/gen-matrix -d diff.json -r specs/${{ inputs.pkg-path }} -m specs/${{ inputs.matrix-file }} > matrix.json
+          tools/scripts/gen-matrix -d diff.json -r specs/${{ inputs.root-dir }} -m specs/${{ inputs.matrix-file }} > matrix.json
           cat matrix.json
 
           echo "matrix<<__EOF___" >> $GITHUB_OUTPUT
@@ -184,12 +185,12 @@ jobs:
 
       - name: Run pre hooks
         run: |
-          tools/scripts/hook -p specs/${{ inputs.pkg-path }}/${{ matrix.pkg }} -g specs/${{ inputs.hooks-dir }} -d ${{ matrix.distro }} -b ${{ matrix.branch }} -t prebuild -e
+          tools/scripts/hook -p specs/${{ inputs.root-dir }}/${{ matrix.pkg }} -g specs/${{ inputs.hooks-dir }} -d ${{ matrix.distro }} -b ${{ matrix.branch }} -t prebuild -e
 
       - name: Download sources
         run: |
-          mkdir -p specs/${{ inputs.pkg-path }}/${{ matrix.pkg }}/source
-          tools/scripts/download -p specs/${{ inputs.pkg-path }}/${{ matrix.pkg }}
+          mkdir -p specs/${{ inputs.root-dir }}/${{ matrix.pkg }}/source
+          tools/scripts/download -p specs/${{ inputs.root-dir }}/${{ matrix.pkg }}
 
       - name: Setup build tree
         id: setup-tree
@@ -206,8 +207,8 @@ jobs:
         run: |
           mkdir -vp ~/BUILD_RPMS/x86_64
           mkdir -vp ~/BUILD_RPMS/noarch
-          cp -v specs/${{ inputs.pkg-path }}/${{ matrix.pkg }}/${{ matrix.pkg }}.spec ${{ steps.setup-tree.outputs.topdir }}/SPECS
-          cp -v specs/${{ inputs.pkg-path }}/${{ matrix.pkg }}/source/* ${{ steps.setup-tree.outputs.topdir }}/SOURCES
+          cp -v specs/${{ inputs.root-dir }}/${{ matrix.pkg }}/${{ matrix.pkg }}.spec ${{ steps.setup-tree.outputs.topdir }}/SPECS
+          cp -v specs/${{ inputs.root-dir }}/${{ matrix.pkg }}/source/* ${{ steps.setup-tree.outputs.topdir }}/SOURCES
 
           # Build RPMs
           # also copy SRPMs if build
@@ -231,7 +232,7 @@ jobs:
 
       - name: Run post hooks
         run: |
-          tools/scripts/hook -p specs/${{ inputs.pkg-path }}/${{ matrix.pkg }} -g specs/${{ inputs.hooks-dir }} -d ${{ matrix.distro }} -b ${{ matrix.branch }} -t postbuild -e
+          tools/scripts/hook -p specs/${{ inputs.root-dir }}/${{ matrix.pkg }} -g specs/${{ inputs.hooks-dir }} -d ${{ matrix.distro }} -b ${{ matrix.branch }} -t postbuild -e
 
       - name: Setup GPG
         env:

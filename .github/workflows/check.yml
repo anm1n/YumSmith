@@ -2,6 +2,13 @@ name: Check update
 on:
   workflow_call:
     inputs:
+      root-dir:
+        required: true
+        type: string
+      hooks-dir:
+        required: true
+        type: string
+
       label-name:
         type: string
         required: false
@@ -14,12 +21,6 @@ on:
         type: string
         required: false
         default: update
-      hooks-dir:
-        required: true
-        type: string
-      pkg-path:
-        required: true
-        type: string
 
 
 jobs:
@@ -79,7 +80,7 @@ jobs:
       - name: Execute the check hook
         if: ${{ env.NEED_CHECK == 'true' }}
         env:
-          ROOT_DIR: ${{ inputs.pkg-path }}
+          ROOT_DIR: ${{ inputs.root-dir }}
           HOOK_DIR: ${{ inputs.hooks-dir }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
