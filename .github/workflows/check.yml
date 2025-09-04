@@ -32,7 +32,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
-          fetch-depth: 1
+          # To perform a merge, find all commits since the last time the two branches diverged
+          # A fetch-depth of 0 will fetch all commits and branches, making things simpler
+          fetch-depth: 0
 
       - name: Ensure label exists
         env:
