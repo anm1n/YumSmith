@@ -273,7 +273,7 @@ jobs:
         run: |
           cp -v specs/${{ inputs.root-dir }}/${{ matrix.pkg }}/${{ matrix.pkg }}.spec ${{ steps.setup-tree.outputs.topdir }}/SPECS
           cp -v specs/${{ inputs.root-dir }}/${{ matrix.pkg }}/source/* ${{ steps.setup-tree.outputs.topdir }}/SOURCES
-          chown -R $BUILD_USER:$BUILD_USER ${{ steps.setup-tree.outputs.topdir }}
+          chown -R $BUILD_USER ${{ steps.setup-tree.outputs.topdir }}
 
           su - $BUILD_USER -s /usr/bin/bash << 'EOF'
             echo "Running build as user [$(whoami)], $(id)"
