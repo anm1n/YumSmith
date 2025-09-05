@@ -197,13 +197,35 @@ jobs:
       - name: Setup basic environment
         run: |
           if command -v dnf > /dev/null; then
-            dnf install -y findutils
+            # util-linux to get /usr/bin/su
+            dnf install -y findutils util-linux
           else
             zypper --non-interactive ref
-            # for whatever reason
-            # dnf not work when using libcurl-mini4 instead of libcurl4
-            zypper --non-interactive install findutils libcurl4
+            # for whatever reason, dnf not work when using libcurl-mini4 instead of libcurl4
+            zypper --non-interactive install findutils libcurl4 util-linux
           fi
+
+      - name: Setup build user
+        id: setup-user
+        run: |
+          if [ "$(id -u)" -eq 0 ]; then
+            build_user=builder
+            # Setup user as builder
+            if ! id -u builder >/dev/null 2>&1; then
+              echo "User builder does not exist, creating..."
+              useradd -m builder
+            else
+              echo "User builder already exists. This user will be used"
+            fi
+          else
+              echo "The current user is non-root user $(whoami), who will be used for building"
+              build_user=$(whoami)
+          fi
+
+          build_user_home=$(grep "^$build_user:" /etc/passwd | cut -d: -f6)
+
+          echo "build-user=$build_user" >> $GITHUB_OUTPUT
+          echo "build-user-home=$build_user_home" >> $GITHUB_OUTPUT
 
       - name: Cache prebuild yq
         uses: actions/cache@v4
@@ -230,41 +252,51 @@ jobs:
 
       - name: Setup build tree
         id: setup-tree
+        env:
+          BUILD_USER: ${{ steps.setup-user.outputs.build-user }}
         run: |
-          echo '%_topdir  %(echo $HOME)/rpmbuild' >> ~/.rpmmacros
-          echo '%debug_package %{nil}' >> ~/.rpmmacros
-          echo '%source_date_epoch_from_changelog %{nil}' >> ~/.rpmmacros
-          rpmdev-setuptree
-          echo "topdir=$HOME/rpmbuild" >> $GITHUB_OUTPUT
+          su - $BUILD_USER -s /usr/bin/bash << 'EOF'
+            echo '%_topdir  %(echo $HOME)/rpmbuild' >> ~/.rpmmacros
+            echo '%debug_package %{nil}' >> ~/.rpmmacros
+            echo '%source_date_epoch_from_changelog %{nil}' >> ~/.rpmmacros
+            rpmdev-setuptree
+            echo "topdir=$HOME/rpmbuild" >> $GITHUB_OUTPUT
+          EOF
 
       - name: Build RPM
         env:
           BUILD_SRPM: ${{ inputs.build-srpm }}
+          BUILD_USER: ${{ steps.setup-user.outputs.build-user }}
         run: |
-          mkdir -vp ~/BUILD_RPMS/x86_64
-          mkdir -vp ~/BUILD_RPMS/noarch
           cp -v specs/${{ inputs.root-dir }}/${{ matrix.pkg }}/${{ matrix.pkg }}.spec ${{ steps.setup-tree.outputs.topdir }}/SPECS
           cp -v specs/${{ inputs.root-dir }}/${{ matrix.pkg }}/source/* ${{ steps.setup-tree.outputs.topdir }}/SOURCES
+          chown -R $BUILD_USER:$BUILD_USER ${{ steps.setup-tree.outputs.topdir }}
 
-          # Build RPMs
-          # also copy SRPMs if build
-          if [ "$BUILD_SRPM" == true ]; then
-            rpmbuild -ba ${{ steps.setup-tree.outputs.topdir }}/SPECS/${{ matrix.pkg }}.spec
+          su - $BUILD_USER -s /usr/bin/bash << 'EOF'
+            echo "Running build as user [$(whoami)], $(id)"
+            mkdir -vp ~/BUILD_RPMS/x86_64
+            mkdir -vp ~/BUILD_RPMS/noarch
 
-            mkdir -vp ~/BUILD_SRPMS
-            find ${{ steps.setup-tree.outputs.topdir }}/SRPMS -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec cp -v {} ~/BUILD_SRPMS \;
-          else
-            rpmbuild -bb ${{ steps.setup-tree.outputs.topdir }}/SPECS/${{ matrix.pkg }}.spec
-          fi
+            # Build RPMs
+            # also copy SRPMs if build
+            if [ "$BUILD_SRPM" == true ]; then
+              rpmbuild -ba ${{ steps.setup-tree.outputs.topdir }}/SPECS/${{ matrix.pkg }}.spec
 
-          # copy RPMs for later operations
-          if [ -d ${{ steps.setup-tree.outputs.topdir }}/RPMS/x86_64 ]; then
-            find ${{ steps.setup-tree.outputs.topdir }}/RPMS/x86_64 -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec cp -v {} ~/BUILD_RPMS/x86_64 \;
-          fi
+              mkdir -vp ~/BUILD_SRPMS
+              find ${{ steps.setup-tree.outputs.topdir }}/SRPMS -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec cp -v {} ~/BUILD_SRPMS \;
+            else
+              rpmbuild -bb ${{ steps.setup-tree.outputs.topdir }}/SPECS/${{ matrix.pkg }}.spec
+            fi
 
-          if [ -d ${{ steps.setup-tree.outputs.topdir }}/RPMS/noarch ]; then
-            find ${{ steps.setup-tree.outputs.topdir }}/RPMS/noarch -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec cp -v {} ~/BUILD_RPMS/noarch \;
-          fi
+            # copy RPMs for later operations
+            if [ -d ${{ steps.setup-tree.outputs.topdir }}/RPMS/x86_64 ]; then
+              find ${{ steps.setup-tree.outputs.topdir }}/RPMS/x86_64 -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec cp -v {} ~/BUILD_RPMS/x86_64 \;
+            fi
+
+            if [ -d ${{ steps.setup-tree.outputs.topdir }}/RPMS/noarch ]; then
+              find ${{ steps.setup-tree.outputs.topdir }}/RPMS/noarch -type f -name "*.rpm" ! -name "*debugsource*" ! -name "*debuginfo*" -exec cp -v {} ~/BUILD_RPMS/noarch \;
+            fi
+          EOF
 
       - name: Run post hooks
         run: |
@@ -302,12 +334,13 @@ jobs:
         env:
           GPG_SECRET_ID: ${{ steps.import-key.outputs.id }}
           BUILD_SRPM: ${{ inputs.build-srpm }}
+          BUILD_USER_HOME: ${{ steps.setup-user.outputs.build-user-home }}
         run: |
-          find "$HOME/BUILD_RPMS/x86_64" -name "*.rpm" -type f -exec rpmsign --addsign {} --define "_gpg_name $GPG_SECRET_ID" \;
-          find "$HOME/BUILD_RPMS/noarch" -name "*.rpm" -type f -exec rpmsign --addsign {} --define "_gpg_name $GPG_SECRET_ID" \;
+          find "$BUILD_USER_HOME/BUILD_RPMS/x86_64" -name "*.rpm" -type f -exec rpmsign --addsign {} --define "_gpg_name $GPG_SECRET_ID" \;
+          find "$BUILD_USER_HOME/BUILD_RPMS/noarch" -name "*.rpm" -type f -exec rpmsign --addsign {} --define "_gpg_name $GPG_SECRET_ID" \;
 
           if [ "$BUILD_SRPM" == true ]; then
-            rpmsign --addsign ~/BUILD_SRPMS/*.rpm --define "_gpg_name $GPG_SECRET_ID"
+            rpmsign --addsign $BUILD_USER_HOME/BUILD_SRPMS/*.rpm --define "_gpg_name $GPG_SECRET_ID"
           fi
 
           gpg --batch --yes --delete-secret-keys "$GPG_SECRET_ID"
@@ -333,17 +366,18 @@ jobs:
           RCLONE_CONFIG_SECTION: ${{ secrets.RCLONE_CONFIG_SECTION }}
           RCLONE_REPO_NAME: ${{ inputs.rclone-repo-name }}
           BUILD_SRPM: ${{ inputs.build-srpm }}
+          BUILD_USER_HOME: ${{ steps.setup-user.outputs.build-user-home }}
         run: |
           echo "$RCLONE_CONFIG_SECTION" | base64 -d > ~/.config/rclone/rclone.conf
 
           # rclone copy takes the 2nd argument as the target directory
           # It recursively creates it if it doesn't exist
           # So, we just copy it
-          rclone copy ~/BUILD_RPMS/x86_64 ${RCLONE_REPO_NAME}:/${{ matrix.distro }}/${{ matrix.branch }}/x86_64 --progress
-          rclone copy ~/BUILD_RPMS/noarch ${RCLONE_REPO_NAME}:/${{ matrix.distro }}/${{ matrix.branch }}/noarch --progress
+          rclone copy $BUILD_USER_HOME/BUILD_RPMS/x86_64 ${RCLONE_REPO_NAME}:/${{ matrix.distro }}/${{ matrix.branch }}/x86_64 --progress
+          rclone copy $BUILD_USER_HOME/BUILD_RPMS/noarch ${RCLONE_REPO_NAME}:/${{ matrix.distro }}/${{ matrix.branch }}/noarch --progress
 
           if [ "$BUILD_SRPM" == true ]; then
-            rclone copy ~/BUILD_SRPMS ${RCLONE_REPO_NAME}:/${{ matrix.distro }}/${{ matrix.branch }}/source --progress
+            rclone copy $BUILD_USER_HOME/BUILD_SRPMS ${RCLONE_REPO_NAME}:/${{ matrix.distro }}/${{ matrix.branch }}/source --progress
           fi
 
           shred -u ~/.config/rclone/rclone.conf
