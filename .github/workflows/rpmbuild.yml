@@ -198,11 +198,11 @@ jobs:
         run: |
           if command -v dnf > /dev/null; then
             # util-linux to get /usr/bin/su
-            dnf install -y findutils util-linux
+            dnf install -y findutils util-linux tar git
           else
             zypper --non-interactive ref
             # for whatever reason, dnf not work when using libcurl-mini4 instead of libcurl4
-            zypper --non-interactive install findutils libcurl4 util-linux
+            zypper --non-interactive install findutils libcurl4 util-linux tar git
           fi
 
       - name: Setup build user
