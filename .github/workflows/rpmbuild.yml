@@ -169,20 +169,6 @@ jobs:
         include: ${{ fromJson(needs.prepare.outputs.matrix) }}
 
     steps:
-      - name: Checkout tools repository
-        uses: actions/checkout@v5
-        with:
-          repository: anm1n/yum2
-          path: tools
-          fetch-depth: 1
-          token: ${{ secrets.TOKEN || secrets.GITHUB_TOKEN }}
-
-      - name: Checkout SPECs repository
-        uses: actions/checkout@v5
-        with:
-          path: specs
-          fetch-depth: 1
-
       - name: Print matrix info
         run: |
           echo "================= Build Matrix Info ================="
@@ -204,6 +190,20 @@ jobs:
             # for whatever reason, dnf not work when using libcurl-mini4 instead of libcurl4
             zypper --non-interactive install findutils libcurl4 util-linux tar git
           fi
+
+      - name: Checkout tools repository
+        uses: actions/checkout@v5
+        with:
+          repository: anm1n/yum2
+          path: tools
+          fetch-depth: 1
+          token: ${{ secrets.TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Checkout SPECs repository
+        uses: actions/checkout@v5
+        with:
+          path: specs
+          fetch-depth: 1
 
       - name: Setup build user
         id: setup-user
@@ -267,7 +267,6 @@ jobs:
 
       - name: Build RPM
         env:
-          BUILD_SRPM: ${{ inputs.build-srpm }}
           BUILD_USER: ${{ steps.setup-user.outputs.build-user }}
         run: |
           cp -v specs/${{ inputs.root-dir }}/${{ matrix.pkg }}/${{ matrix.pkg }}.spec ${{ steps.setup-tree.outputs.topdir }}/SPECS
@@ -281,7 +280,7 @@ jobs:
 
             # Build RPMs
             # also copy SRPMs if build
-            if [ "$BUILD_SRPM" == true ]; then
+            if [[ ${{ inputs.build-srpm }} == true ]]; then
               rpmbuild -ba ${{ steps.setup-tree.outputs.topdir }}/SPECS/${{ matrix.pkg }}.spec
 
               mkdir -vp ~/BUILD_SRPMS
