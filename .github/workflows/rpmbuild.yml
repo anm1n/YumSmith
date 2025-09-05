@@ -254,14 +254,16 @@ jobs:
         id: setup-tree
         env:
           BUILD_USER: ${{ steps.setup-user.outputs.build-user }}
+          BUILD_USER_HOME: ${{ steps.setup-user.outputs.build-user-home }}
         run: |
           su - $BUILD_USER -s /usr/bin/bash << 'EOF'
             echo '%_topdir  %(echo $HOME)/rpmbuild' >> ~/.rpmmacros
             echo '%debug_package %{nil}' >> ~/.rpmmacros
             echo '%source_date_epoch_from_changelog %{nil}' >> ~/.rpmmacros
             rpmdev-setuptree
-            echo "topdir=$HOME/rpmbuild" >> $GITHUB_OUTPUT
           EOF
+
+          echo "topdir=$BUILD_USER_HOME/rpmbuild" >> $GITHUB_OUTPUT
 
       - name: Build RPM
         env:
