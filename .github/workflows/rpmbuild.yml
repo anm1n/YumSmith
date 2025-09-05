@@ -184,13 +184,13 @@ jobs:
         run: |
           if command -v dnf > /dev/null; then
             # util-linux to get /usr/bin/su
-            dnf install -y findutils util-linux tar git
+            dnf install -y findutils util-linux tar git gzip
           else
             zypper --non-interactive ref
             # busybox often introduces dependency conflicts
             zypper --non-interactive addlock busybox busybox-less
             # for whatever reason, dnf not work when using libcurl-mini4 instead of libcurl4
-            zypper --non-interactive install findutils libcurl4 util-linux tar git
+            zypper --non-interactive install findutils libcurl4 util-linux tar git gzip
           fi
 
       - name: Checkout tools repository
