@@ -94,24 +94,62 @@ jobs:
 
           shred -u ~/.config/rclone/rclone.conf
 
+      - name: Setup ajv-cli
+        run: |
+          npm install -g ajv-cli
+
+      - name: Validate yaml, status.json
+        run: |
+          # 1. matrix.yml
+          ajv validate -s tools/schema/matrix.json  -d specs/${{ inputs.matrix-file }} --errors=text
+
+          # 2. config.yaml/config.yml
+          for project_dir in "specs/${{ inputs.root-dir }}"/*; do
+            if [ -d "$project_dir" ]; then
+              project_name=$(basename "$project_dir")
+
+              # Priority: config.yaml > config.yml
+              config_file=""
+              if [ -f "$project_dir/config.yaml" ]; then
+                config_file="$project_dir/config.yaml"
+              elif [ -f "$project_dir/config.yml" ]; then
+                config_file="$project_dir/config.yml"
+              fi
+
+              if [ -z "$config_file" ]; then
+                echo "Skipping project $project_name: config.yaml or config.yml not found"
+                continue
+              fi
+
+              echo "Validating $config_file"
+              ajv validate -s tools/schema/config.json  -d $config_file --errors=text
+            fi
+          done
+
+          # 3. status.json
+          ajv validate -s tools/schema/spec.json  -d status.json --errors=text
+
       - name: Gen spec.json
         run: |
           tools/scripts/gen-spec -o spec.json -r specs/${{ inputs.root-dir }} -m specs/${{ inputs.matrix-file }}
           cat spec.json
+          ajv validate -s tools/schema/spec.json  -d spec.json --errors=text
 
       - name: Gen diff.json
         run: |
           tools/scripts/gen-diff spec.json status.json > diff.json
           cat diff.json
+          ajv validate -s tools/schema/spec.json  -d diff.json --errors=text
 
       - name: Gen matrix
         id: gen-matrix
         run: |
-          tools/scripts/gen-matrix -d diff.json -r specs/${{ inputs.root-dir }} -m specs/${{ inputs.matrix-file }} > matrix.json
-          cat matrix.json
+          tools/scripts/gen-matrix -d diff.json -r specs/${{ inputs.root-dir }} -m specs/${{ inputs.matrix-file }} > matrix-include.json
+          cat matrix-include.json
+          ajv validate -s tools/schema/matrix-include.json  -d matrix-include.json --errors=text
 
           echo "matrix<<__EOF___" >> $GITHUB_OUTPUT
-          cat matrix.json >> $GITHUB_OUTPUT
+          cat matrix-include.json >> $GITHUB_OUTPUT
           echo "__EOF___" >> $GITHUB_OUTPUT
 
 
