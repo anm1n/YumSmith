@@ -1,0 +1,252 @@
+# YumSmith
+
+> **Warning**: YumSmith is currently in an early development stage. Breaking changes may occur at any time.
+
+**YumSmith** is a GitHub Actions-based automation pipeline that can easily ***create yum repositories from source***. It provides [reusable workflows](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows) that accept SPEC files and configuration, then builds packages for multiple distributions in parallel and generates repository metadata.
+
+## Features
+
+- **Multi-distribution Support**: Build RPM packages for various Linux distributions (Fedora, openSUSE, openEuler, etc.)
+- **Parallel Building**: Efficient parallel builds across different distribution targets
+- **Automated Source Download**: Automatically download source packages based on configuration
+- **Hook System**: Extensible pre/post-build hook system for custom build logic
+- **GPG Signing**: Automatic package and repository signing
+- **Remote Storage**: Upload packages to remote storage using Rclone
+- **Update Checking**: Experimental automatic update detection for upstream releases
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Configuration](#configuration)
+- [Setting Up Private Fork](#setting-up-private-fork)
+- [Automatic Update Checking](#automatic-update-checking)
+- [Examples](#examples)
+
+## Quick Start
+
+For a complete example, refer to the [YumSmith-example repository](https://github.com/anm1n/YumSmith-example).
+
+1. **Create a new repository**: Initialize a new GitHub repository for your SPEC files and configurations.
+
+2. **Set up your workflows**: Create two core workflows in your repository to reference YumSmith's reusable workflows.
+
+### Example Workflow: Build RPMs
+
+Create a file `.github/workflows/build.yml` in your repository:
+
+```yaml
+name: Build RPMs
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    uses: anm1n/YumSmith/.github/workflows/rpmbuild.yml@main
+    with:
+      root-dir: projects
+      hooks-dir: hooks
+      matrix-file: matrix.yml
+      metadata-workflow-name: update-metadata
+      hostname: builder.example.com
+    secrets:
+      RCLONE_CONFIG_SECTION: ${{ secrets.RCLONE_CONFIG_SECTION }}
+      GPG_SECRET: ${{ secrets.GPG_SECRET }}
+```
+
+### Example Workflow: Update Metadata
+
+Create a file `.github/workflows/update-metadata.yml` in your repository:
+
+```yaml
+name: Update Metadata
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update:
+    uses: anm1n/YumSmith/.github/workflows/update-metadata.yml@main
+    secrets:
+      RCLONE_CONFIG_SECTION: ${{ secrets.RCLONE_CONFIG_SECTION }}
+      GPG_SECRET: ${{ secrets.GPG_SECRET }}
+```
+
+3. **Provide hooks and configurations**: Organize your repository with the following structure:
+
+```
+your-repo/
+├── .github/workflows/
+│   ├── build.yml
+│   └── update-metadata.yml
+├── matrix.yml
+├── hooks/
+│   ├── check/
+│   │   ├── github-release
+│   │   └── github-tag
+│   ├── prebuild/
+│   └── postbuild/
+└── projects/
+    ├── package1/
+    │   ├── config.yml
+    │   └── package1.spec
+    └── package2/
+        ├── config.yml
+        └── package2.spec
+```
+
+4. **Configure repository secrets**: Add the following secrets in your repository settings:
+
+- **RCLONE_CONFIG_SECTION**: Base64-encoded Rclone configuration file
+- **GPG_SECRET**: Base64-encoded GPG private key for signing
+
+## Configuration
+
+### Project Configuration Files
+
+Each project requires a `config.yaml` or `config.yml` file that defines source packages, build matrix, and hooks:
+
+```yaml
+source:
+  - name: source.tar.gz
+    url: https://github.com/example/project/archive/refs/tags/v1.0.0.tar.gz
+    sha256sum: abcd1234...
+
+matrix:
+  - distro: fedora
+    branch: "43"
+    image: fedora:43
+  - distro: opensuse
+    branch: "15.6"
+    image: opensuse/leap:15.6
+
+hooks:
+  universal:
+    check: github-release
+```
+
+### Matrix Configuration
+
+The global matrix configuration (`matrix.yml`) defines available distributions:
+
+```yaml
+- distro: fedora
+  branch: "43"
+  image: fedora:43
+
+- distro: opensuse
+  branch: "15.6"
+  image: opensuse/leap:15.6
+```
+
+### Workflow Input Parameters
+
+#### Required Inputs
+
+- `root-dir`: Directory containing project subdirectories
+- `hooks-dir`: Directory containing hook scripts
+- `matrix-file`: YAML file defining available distributions
+- `metadata-workflow-name`: Name of metadata update workflow
+- `hostname`: Hostname used in build containers
+
+#### Optional Inputs
+
+- `rclone-repo-name`: Rclone remote name (default: "remote")
+- `build-srpm`: Whether to build source RPMs (default: false)
+- `tools-repo`: Tools repository reference (default: "anm1n/YumSmith")
+
+### Required Secrets
+
+- **RCLONE_CONFIG_SECTION**: Base64-encoded Rclone configuration file
+- **GPG_SECRET**: Base64-encoded GPG private key for signing
+- **TOKEN**: Personal Access Token for private repository access (optional)
+
+The base64-encoded secret can be generated by `base64 --wrap=0`
+
+## Setting Up Private Fork
+
+If you choose to fork this repository as a private repository, here are the key steps to ensure everything works correctly:
+
+1. **Update Workflow References**
+
+   When referencing workflows from your private fork, ensure the workflow addresses are updated to point to your private repository. Additionally, pass the private repository address as the `tools-repo` parameter in your workflows.
+
+   Example:
+
+   ```yaml
+   jobs:
+     build:
+       uses: yourusername/YumSmith/.github/workflows/rpmbuild.yml@main
+       with:
+         tools-repo: yourusername/YumSmith
+         # Other parameters...
+   ```
+
+2. **Allow Workflow Access**
+
+   In your private repository, go to **Settings → Actions → General → Access** and enable access for repositories within the same user or organization. This ensures that workflows in your private repository can be accessed by other repositories in your account or organization.
+
+3. **Provide a Personal Access Token (PAT)**
+
+   To allow workflows to check out your private repository, create a Personal Access Token (PAT) with the necessary permissions:
+
+   - Go to **GitHub → Settings → Developer settings → Personal access tokens**
+   - Generate a new token with the `repo` scope
+   - Add the token as a secret in your private repository by assigning it to the `TOKEN` secret (used by `rpmbuild.yml`):
+
+     ```yaml
+     secrets:
+       TOKEN: <your-personal-access-token>
+     ```
+
+   This ensures that the `rpmbuild.yml` workflow can use the PAT for accessing your private repository.
+
+## Automatic Update Checking
+
+This is an experimental feature that is barely functional. It works by running dedicated hook scripts to modify files and create pull requests for updates. For more details, refer to the [YumSmith-example repository](https://github.com/anm1n/YumSmith-example).
+
+## Examples
+
+See the [YumSmith-example repository](https://github.com/anm1n/YumSmith-example) for complete examples of:
+
+- Project structure with multiple packages
+- Hook implementations
+- Matrix configurations
+- SPEC file examples
+
+### Build Dependencies
+
+Build dependencies must be installed through hooks, as the workflow does not directly handle this aspect. If your SPEC file contains unresolvable macros that require separate build dependencies for support, you need to install these dependencies in advance through project-level hooks.
+
+For example, if your SPEC file uses macros provided by additional RPM packages (like `golang` macros, `cmake` macros, etc.), create a prebuild hook to install these packages:
+
+```bash
+#!/bin/bash
+# projects/hugo/scripts/install-build-deps.sh
+
+# Install Go build dependencies for Go projects
+if [[ "$DISTRO" == "fedora" ]]; then
+    dnf install -y golang rpm-build-macros
+elif [[ "$DISTRO" == "opensuse" ]]; then
+    zypper install -y go rpm-macros
+fi
+```
+
+Then reference this hook in your project's `config.yml`:
+
+```yaml
+hooks:
+  universal:
+    pre_global_prebuild:
+      - hooks/prebuild/install-build-deps.sh
+```
+
+## See Also
+
+- [Red Hat RPM Packaging Guide](https://rpm-packaging-guide.github.io/) - Comprehensive guide to RPM packaging by Red Hat
+- [Fedora Packaging Guidelines](https://docs.fedoraproject.org/en-US/packaging-guidelines/) - Official Fedora packaging guidelines and best practices
+- [openSUSE Packaging Guidelines](https://en.opensuse.org/openSUSE:Packaging_guidelines) - openSUSE specific packaging standards and conventions
+- [openEuler Packaging Guidelines](https://docs.openeuler.openatom.cn/en/docs/24.03_LTS_SP2/server/development/application_dev/building_an_rpm_package.html) - openEuler packaging guidelines and requirements

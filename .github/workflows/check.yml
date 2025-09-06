@@ -3,21 +3,26 @@ on:
   workflow_call:
     inputs:
       root-dir:
+        description: "Parent directory containing the project directory"
         required: true
         type: string
       hooks-dir:
+        description: "Directory containing hooks"
         required: true
         type: string
 
       label-name:
+        description: "Label name used for automatic update checking"
         type: string
         required: false
         default: auto-update
       label-color:
+        description: "Label color used for automatic update checking"
         type: string
         required: false
         default: 0E8A16
       update-branch-name:
+        description: "Git branch name used for automatic update checking"
         type: string
         required: false
         default: update
