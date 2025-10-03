@@ -271,6 +271,7 @@ jobs:
           BUILD_USER_HOME: ${{ steps.setup-user.outputs.build-user-home }}
         run: |
           su - $BUILD_USER -s /usr/bin/bash << 'EOF'
+            set -e
             echo '%_topdir  %(echo $HOME)/rpmbuild' >> ~/.rpmmacros
             echo '%debug_package %{nil}' >> ~/.rpmmacros
             echo '%source_date_epoch_from_changelog %{nil}' >> ~/.rpmmacros
@@ -288,6 +289,7 @@ jobs:
           chown -R $BUILD_USER ${{ steps.setup-tree.outputs.topdir }}
 
           su - $BUILD_USER -s /usr/bin/bash << 'EOF'
+            set -e
             echo "Running build as user [$(whoami)], $(id)"
             mkdir -vp ~/BUILD_RPMS/x86_64
             mkdir -vp ~/BUILD_RPMS/noarch
