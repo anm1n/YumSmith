@@ -100,7 +100,7 @@ jobs:
           # The problem can be solved by deleting the file in advance
           rclone delete -v ${RCLONE_REPO_NAME}:/status.json || true
           find "copy/" -mindepth 3 -maxdepth 3 -type d -name repodata | while read -r repodata_dir; do
-            to_be_delete = ${repodata_dir#copy}
+            to_be_delete=${repodata_dir#copy}
             rclone delete -v ${RCLONE_REPO_NAME}:${to_be_delete} || true
           done
 
