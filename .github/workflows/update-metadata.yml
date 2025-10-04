@@ -96,6 +96,14 @@ jobs:
           RCLONE_REPO_NAME: ${{ inputs.rclone-repo-name }}
         run: |
           echo "$RCLONE_CONFIG_VAL" | base64 -d > ~/.config/rclone/rclone.conf
+          # For some reason, `sync` may miss files to be transferred
+          # The problem can be solved by deleting the file in advance
+          rclone delete -v ${RCLONE_REPO_NAME}:/status.json || true
+          find "copy/" -mindepth 3 -maxdepth 3 -type d -name repodata | while read -r repodata_dir; do
+            to_be_delete = ${repodata_dir#copy}
+            rclone delete -v ${RCLONE_REPO_NAME}:${to_be_delete} || true
+          done
+
           rclone sync copy/ ${RCLONE_REPO_NAME}:/ --progress
           shred -u ~/.config/rclone/rclone.conf
 
