@@ -39,6 +39,12 @@ on:
         required: false
         default: anm1n/YumSmith
 
+      cache-interval:
+        description: "Defines the time-based interval used to generate the cache key (e.g., '1-day' creates a new cache each day, '2-week' creates one every two weeks)."
+        type: string
+        required: false
+        default: 1-week
+
     secrets:
       RCLONE_CONFIG_SECTION:
         description: "The contents of the rclone configuration file, encoded in base64"
@@ -57,7 +63,8 @@ jobs:
       run:
         shell: bash
     outputs:
-      matrix: ${{ steps.gen-matrix.outputs.matrix }}
+      build-matrix: ${{ steps.gen-build-matrix.outputs.matrix }}
+      cache-matrix: ${{ steps.gen-cache-matrix.outputs.matrix }}
     steps:
       - name: Checkout tools repository
         uses: actions/checkout@v5
@@ -153,21 +160,45 @@ jobs:
           cat diff.json
           ajv validate -s tools/schema/spec.json  -d diff.json --errors=text
 
-      - name: Gen matrix
-        id: gen-matrix
+      - name: Gen build matrix
+        id: gen-build-matrix
         run: |
-          tools/scripts/gen-matrix -d diff.json -r specs/${{ inputs.root-dir }} -m specs/${{ inputs.matrix-file }} > matrix-include.json
-          cat matrix-include.json
-          ajv validate -s tools/schema/matrix-include.json  -d matrix-include.json --errors=text
+          tools/scripts/gen-matrix -d diff.json -r specs/${{ inputs.root-dir }} -m specs/${{ inputs.matrix-file }} > matrix-build.json
+          cat matrix-build.json
+          ajv validate -s tools/schema/matrix-build.json  -d matrix-build.json --errors=text
 
           echo "matrix<<__EOF___" >> $GITHUB_OUTPUT
-          cat matrix-include.json >> $GITHUB_OUTPUT
+          cat matrix-build.json >> $GITHUB_OUTPUT
           echo "__EOF___" >> $GITHUB_OUTPUT
 
+      - name: Gen cache matrix
+        id: gen-cache-matrix
+        run: |
+          jq 'map({distro, branch, image}) | unique' matrix-build.json > matrix-cache.json
+          cat matrix-cache.json
+
+          echo "matrix<<__EOF___" >> $GITHUB_OUTPUT
+          cat matrix-cache.json >> $GITHUB_OUTPUT
+          echo "__EOF___" >> $GITHUB_OUTPUT
+
+  cache-warming:
+    needs: prepare
+    if: ${{ join(fromJson(needs.prepare.outputs.cache-matrix)) != '' }}
+    uses: ./.github/workflows/cache-warming.yml
+    with:
+      distro: ${{ matrix.distro }}
+      branch: ${{ matrix.branch }}
+      image:  ${{ matrix.image }}
+      hooks-dir: ${{ inputs.hooks-dir }}
+      cache-interval: ${{ inputs.cache-interval }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.prepare.outputs.cache-matrix) }}
 
   build:
-    needs: prepare
-    if: ${{ join(fromJson(needs.prepare.outputs.matrix)) != '' }}
+    needs: [prepare, cache-warming]
+    if: ${{ join(fromJson(needs.prepare.outputs.build-matrix)) != '' }}
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -178,7 +209,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJson(needs.prepare.outputs.matrix) }}
+        include: ${{ fromJson(needs.prepare.outputs.build-matrix) }}
 
     steps:
       - name: Print matrix info
@@ -254,6 +285,53 @@ jobs:
           fi
           echo '0fb28c6680193c41b364193d0c0fc4a03177aecde51cfc04d506b1517158c2fb  yq' | sha256sum -c
           install -m 755 yq /usr/bin/yq
+
+      - name: Generate cache key
+        id: gen-key
+        env:
+          CACHE_INTERVAL: ${{ inputs.cache-interval }}
+          DISTRO: ${{ matrix.distro }}
+          BRANCH: ${{ matrix.branch }}
+        run: |
+          N=$(echo "$CACHE_INTERVAL" | cut -d'-' -f1)
+          M=$(echo "$CACHE_INTERVAL" | cut -d'-' -f2)
+
+          YEAR=$(date +%Y)
+          MONTH=$(date +%m)
+          DAY=$(date +%d)
+
+          case "$M" in
+              "day")
+                  DAY_OF_YEAR=$(date +%j)
+                  VALUE=$(( (DAY_OF_YEAR - 1) / N ))
+                  SUFFIX="D"
+                  ;;
+              "week")
+                  WEEK_OF_YEAR=$(date +%V)
+                  VALUE=$(( (WEEK_OF_YEAR - 1) / N ))
+                  SUFFIX="W"
+                  ;;
+              "mon")
+                  VALUE=$(( (MONTH - 1) / N ))
+                  SUFFIX="M"
+                  ;;
+              *)
+                  echo "Error: Unsupported interval unit: $M"
+                  exit 1
+                  ;;
+          esac
+
+          key="${DISTRO}-${BRANCH}-${YEAR}-${VALUE}-${SUFFIX}"
+          echo "Using cache key: $key"
+          echo "key=$key" >> $GITHUB_OUTPUT
+
+      - name: Restore package cache
+        uses: actions/cache/restore@v4
+        with:
+          key: ${{ steps.gen-key.outputs.key }}
+          path: |
+            /var/cache/zypp/packages
+            /var/cache/dnf
 
       - name: Run pre hooks
         run: |

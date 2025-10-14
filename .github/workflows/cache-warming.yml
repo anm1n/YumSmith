@@ -1,0 +1,138 @@
+name: Cache warming
+on:
+  workflow_call:
+    inputs:
+      distro:
+        type: string
+        required: true
+      branch:
+        type: string
+        required: true
+      image:
+        type: string
+        required: true
+
+      hooks-dir:
+        description: "Directory containing hooks"
+        required: true
+        type: string
+      cache-interval:
+        description: "Defines the time-based interval used to generate the cache key (e.g., '1-day' creates a new cache each day, '2-week' creates one every two weeks)."
+        type: string
+        required: false
+        default: 1-week
+
+
+jobs:
+  cache-warming:
+    runs-on: ubuntu-24.04
+    container:
+      image: ${{ inputs.image }}
+    steps:
+      - name: Print matrix info
+        run: |
+          echo "================= Cache Matrix Info ================="
+          printf "%-10s | %s\n" "DISTRO"  "${{ inputs.distro }}"
+          printf "%-10s | %s\n" "BRANCH"  "${{ inputs.branch }}"
+          printf "%-10s | %s\n" "IMAGE"   "${{ inputs.image }}"
+          printf "%-10s | %s\n" "INTERVAL"   "${{ inputs.cache-interval }}"
+          echo "====================================================="
+
+      - name: Validate cache interval
+        env:
+          CACHE_INTERVAL: ${{ inputs.cache-interval }}
+        run: |
+          if echo "$CACHE_INTERVAL" | grep -Eq '^[0-9]+-(day|week|mon)$'; then
+              echo "Using cache interval $CACHE_INTERVAL"
+          else
+              echo "CACHE_INTERVAL in bad format. Expected format: <number>-<day|week|mon> (e.g., '1-day', '2-week', '3-mon')."
+              exit 1
+          fi
+
+      - name: Generate cache key
+        id: gen-key
+        env:
+          CACHE_INTERVAL: ${{ inputs.cache-interval }}
+          DISTRO: ${{ inputs.distro }}
+          BRANCH: ${{ inputs.branch }}
+        run: |
+          N=$(echo "$CACHE_INTERVAL" | cut -d'-' -f1)
+          M=$(echo "$CACHE_INTERVAL" | cut -d'-' -f2)
+
+          YEAR=$(date +%Y)
+          MONTH=$(date +%m)
+          DAY=$(date +%d)
+
+          case "$M" in
+              "day")
+                  DAY_OF_YEAR=$(date +%j)
+                  VALUE=$(( (DAY_OF_YEAR - 1) / N ))
+                  SUFFIX="D"
+                  ;;
+              "week")
+                  WEEK_OF_YEAR=$(date +%V)
+                  VALUE=$(( (WEEK_OF_YEAR - 1) / N ))
+                  SUFFIX="W"
+                  ;;
+              "mon")
+                  VALUE=$(( (MONTH - 1) / N ))
+                  SUFFIX="M"
+                  ;;
+              *)
+                  echo "Error: Unsupported interval unit: $M"
+                  exit 1
+                  ;;
+          esac
+
+          key="${DISTRO}-${BRANCH}-${YEAR}-${VALUE}-${SUFFIX}"
+          echo "Using cache key: $key"
+          echo "key=$key" >> $GITHUB_OUTPUT
+
+      - name: Checkout SPECs repository
+        uses: actions/checkout@v5
+        with:
+          path: specs
+          fetch-depth: 1
+
+      - name: Cache
+        id: cache
+        uses: actions/cache@v4
+        with:
+          key: ${{ steps.gen-key.outputs.key }}
+          path: |
+            /var/cache/zypp/packages
+            /var/cache/dnf
+
+      - name: Run hooks when cache miss
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          DISTRO: ${{ inputs.distro }}
+          BRANCH: ${{ inputs.branch }}
+          HOOKS_DIR: ${{ inputs.hooks-dir }}
+        run: |
+          SCRIPTS_TO_RUN=()
+
+          HOOK_TYPE=cache
+          GLOBAL_DIR="$HOOKS_DIR/$HOOK_TYPE/$DISTRO/${BRANCH}/"
+          if [[ -d "$GLOBAL_DIR" ]]; then
+              # symbolic link is allowed
+              mapfile -d '' files < <(find -L "$GLOBAL_DIR" -maxdepth 1 -type f -executable -print0)
+              mapfile -t sorted < <(printf "%s\n" "${files[@]}" | sort -u)
+              SCRIPTS_TO_RUN+=("${sorted[@]}")
+          fi
+
+          # OUTPUT
+          echo "=== Hook execution order for type: $HOOK_TYPE ==="
+          for script in "${SCRIPTS_TO_RUN[@]}"; do
+              echo "$script"
+          done
+
+          # EXECUTE
+          for script in "${SCRIPTS_TO_RUN[@]}"; do
+              if [[ ! -x $(realpath "$script") ]]; then
+                  echo ">>> Error: Script $script not found or not executable" >&2
+                  exit 1
+              fi
+              echo ">>> Running: $script"
+              "$script"
+          done
