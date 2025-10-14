@@ -332,6 +332,7 @@ jobs:
           path: |
             /var/cache/zypp/packages
             /var/cache/dnf
+            /var/cache/libdnf5
 
       - name: Run pre hooks
         run: |

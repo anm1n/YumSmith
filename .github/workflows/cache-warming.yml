@@ -115,6 +115,7 @@ jobs:
           path: |
             /var/cache/zypp/packages
             /var/cache/dnf
+            /var/cache/libdnf5
 
       - name: Run hooks when cache miss
         if: steps.cache.outputs.cache-hit != 'true'
@@ -127,6 +128,7 @@ jobs:
         run: |
           mkdir -vp /var/cache/zypp/packages
           mkdir -vp /var/cache/dnf
+          mkdir -vp /var/cache/libdnf5
 
           SCRIPTS_TO_RUN=()
 
