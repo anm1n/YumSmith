@@ -38,6 +38,19 @@ jobs:
           printf "%-10s | %s\n" "INTERVAL"   "${{ inputs.cache-interval }}"
           echo "====================================================="
 
+      - name: Setup basic environment
+        run: |
+          if command -v dnf > /dev/null; then
+            # util-linux to get /usr/bin/su
+            dnf install -y findutils util-linux tar git gzip
+          else
+            zypper --non-interactive ref
+            # busybox often introduces dependency conflicts
+            zypper --non-interactive addlock busybox busybox-less
+            # for whatever reason, dnf not work when using libcurl-mini4 instead of libcurl4
+            zypper --non-interactive install findutils libcurl4 util-linux tar git gzip
+          fi
+
       - name: Validate cache interval
         env:
           CACHE_INTERVAL: ${{ inputs.cache-interval }}
@@ -105,6 +118,7 @@ jobs:
 
       - name: Run hooks when cache miss
         if: steps.cache.outputs.cache-hit != 'true'
+        working-directory: ./specs
         env:
           DISTRO: ${{ inputs.distro }}
           BRANCH: ${{ inputs.branch }}
