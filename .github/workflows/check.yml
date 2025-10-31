@@ -42,6 +42,18 @@ jobs:
           # A fetch-depth of 0 will fetch all commits and branches, making things simpler
           fetch-depth: 0
 
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Setup venv
+        run: |
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
       - name: Ensure label exists
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
