@@ -75,6 +75,9 @@ jobs:
 
       - name: Mount yum repo
         if: ${{ inputs.work-mode == 'mount' }}
+        env:
+          RCLONE_CONFIG_VAL: ${{ secrets.RCLONE_CONFIG_SECTION }}
+          RCLONE_REPO_NAME: ${{ inputs.rclone-repo-name }}
         run: |
           echo "$RCLONE_CONFIG_VAL" | base64 -d > ~/.config/rclone/rclone.conf
           mkdir -v copy
