@@ -12,6 +12,11 @@ on:
         type: string
         required: false
         default: anm1n/YumSmith
+      work-mode:
+        description: "How workflow get all rpms, pull or mount"
+        required: false
+        type: string
+        default: pull
 
     secrets:
       RCLONE_CONFIG_SECTION:
@@ -58,6 +63,7 @@ jobs:
           mkdir -vp ~/.config/rclone
 
       - name: Pull yum repo
+        if: ${{ inputs.work-mode == 'pull' }}
         env:
           RCLONE_CONFIG_VAL: ${{ secrets.RCLONE_CONFIG_SECTION }}
           RCLONE_REPO_NAME: ${{ inputs.rclone-repo-name }}
@@ -65,6 +71,14 @@ jobs:
           echo "$RCLONE_CONFIG_VAL" | base64 -d > ~/.config/rclone/rclone.conf
           mkdir -v copy
           rclone copy ${RCLONE_REPO_NAME}:/ copy/ --progress
+          shred -u ~/.config/rclone/rclone.conf
+
+      - name: Mount yum repo
+        if: ${{ inputs.work-mode == 'mount' }}
+        run: |
+          echo "$RCLONE_CONFIG_VAL" | base64 -d > ~/.config/rclone/rclone.conf
+          mkdir -v copy
+          rclone mount --daemon --vfs-cache-mode full ${RCLONE_REPO_NAME}:/ copy/
           shred -u ~/.config/rclone/rclone.conf
 
       - name: Import GPG key
@@ -82,7 +96,11 @@ jobs:
         env:
           GPG_SECRET_ID: ${{ steps.import-key.outputs.id }}
         run: |
-          tools/scripts/gen-repodata -r copy -s "$GPG_SECRET_ID"
+          if [[ "${{ inputs.work-mode }}" == "pull" ]]; then
+            tools/scripts/gen-repodata -r copy -s "$GPG_SECRET_ID"
+          else
+            tools/scripts/gen-repodata -r copy -s "$GPG_SECRET_ID" -u
+          fi
           gpg --batch --yes --delete-secret-keys "$GPG_SECRET_ID"
 
       - name: Generate status.json
@@ -91,6 +109,7 @@ jobs:
           cat copy/status.json
 
       - name: Push metadata
+        if: ${{ inputs.work-mode == 'pull' }}
         env:
           RCLONE_CONFIG_VAL: ${{ secrets.RCLONE_CONFIG_SECTION }}
           RCLONE_REPO_NAME: ${{ inputs.rclone-repo-name }}
@@ -112,5 +131,8 @@ jobs:
         env:
           GPG_SECRET_ID: ${{ steps.import-key.outputs.id }}
         run: |
+          if [[ "${{ inputs.work-mode }}" == "mount" ]]; then
+            fusermount -u copy
+          fi
           test -e ~/.config/rclone/rclone.conf && shred -u ~/.config/rclone/rclone.conf
           gpg --batch --yes --delete-secret-keys "$GPG_SECRET_ID" || true

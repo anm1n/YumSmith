@@ -1,13 +1,16 @@
 #!/bin/bash
 set -e
 # Parse command-line arguments using getopts
-while getopts ":r:s:" opt; do
+while getopts ":r:s:u" opt; do
     case $opt in
         r)
             ROOT_DIR="$OPTARG"
             ;;
         s)
             GPG_SEC_ID="$OPTARG"
+            ;;
+        u)
+            UPDATE=true
             ;;
         \?)
             echo "❌ Invalid option: -$OPTARG" >&2
@@ -22,7 +25,7 @@ done
 
 # Check if -r argument is provided
 if [ -z "$ROOT_DIR" ]; then
-    echo "ℹ️ Usage: $0 -r ROOT_DIR [-s GPG_KEY_FINGERPRINT]"
+    echo "ℹ️ Usage: $0 -r ROOT_DIR [-s GPG_KEY_FINGERPRINT] [-u]"
     exit 1
 fi
 
@@ -39,9 +42,17 @@ find "$ROOT_DIR" -mindepth 2 -maxdepth 2 -type d | while read -r second_level; d
         if [ -d "$second_level/$arch" ]; then
             echo "🚀 Found $arch in $second_level, running createrepo..."
             if command -v createrepo_c > /dev/null; then
-                createrepo_c "$second_level"
+                if [[ "$UPDATE" == true ]]; then
+                    createrepo_c --verbose --update "$second_level"
+                else
+                    createrepo_c --verbose "$second_level"
+                fi
             elif command -v createrepo > /dev/null; then
-                createrepo "$second_level"
+                if [[ "$UPDATE" == true ]]; then
+                    createrepo --verbose --update "$second_level"
+                else
+                    createrepo --verbose "$second_level"
+                fi
             else
                 echo "❌ Error: createrepo or createrepo_c not found in PATH"
             fi
