@@ -135,6 +135,9 @@ jobs:
           GPG_SECRET_ID: ${{ steps.import-key.outputs.id }}
         run: |
           if [[ "${{ inputs.work-mode }}" == "mount" ]]; then
+            # we dont know when rclone write back, so it might just break repodata/
+            # https://github.com/rclone/rclone/issues/7309
+            sleep 2m
             fusermount -u copy
           fi
           test -e ~/.config/rclone/rclone.conf && shred -u ~/.config/rclone/rclone.conf
